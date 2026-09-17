@@ -9,6 +9,32 @@ use crate::game::random_key;
 
 pub const MAX_GROUPS: usize = 1000;
 
+fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let day_of_year = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    era * 146_097 + day_of_era - 719_468
+}
+
+fn reset_of_year(year: i64) -> u64 {
+    ((days_from_civil(year, 9, 27) * 86_400 + 12 * 3600) * 1000) as u64
+}
+
+/// The most recent moment 26 September ended everywhere on Earth: 27 September,
+/// 00:00 at UTC-12, which is 12:00 UTC. Listings from before it are cleared.
+pub fn last_reset(now: u64) -> u64 {
+    let mut year = 1970 + (now / 31_556_952_000) as i64;
+    while reset_of_year(year) > now {
+        year -= 1;
+    }
+    while reset_of_year(year + 1) <= now {
+        year += 1;
+    }
+    reset_of_year(year)
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Group {
     pub id: String,
@@ -136,6 +162,16 @@ mod tests {
             contact: "someone@example.com".into(),
             password: password.into(),
         }
+    }
+
+    #[test]
+    fn listings_reset_once_26_september_is_over_everywhere() {
+        let reset_2025 = 1_758_974_400_000;
+        let reset_2026 = 1_790_510_400_000;
+        assert_eq!(last_reset(1_789_603_200_000), reset_2025);
+        assert_eq!(last_reset(reset_2026 - 1), reset_2025);
+        assert_eq!(last_reset(reset_2026), reset_2026);
+        assert_eq!(last_reset(1_709_164_800_000), 1_695_816_000_000);
     }
 
     #[test]

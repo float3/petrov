@@ -344,7 +344,12 @@ async fn time() -> Response {
 
 async fn list_groups(State(app): State<Shared>) -> Response {
     let groups = app.groups.lock().await;
-    let mut public: Vec<_> = groups.iter().map(Group::public).collect();
+    let reset = groups::last_reset(now_ms());
+    let mut public: Vec<_> = groups
+        .iter()
+        .filter(|g| g.created >= reset)
+        .map(Group::public)
+        .collect();
     public.sort_by_key(|g| std::cmp::Reverse(g.updated));
     Json(public).into_response()
 }
@@ -448,7 +453,8 @@ async fn cleanup(app: Shared) {
         drop(games);
         let mut groups = app.groups.lock().await;
         let before = groups.len();
-        groups.retain(|g| g.updated + 400 * DAY_MS > now);
+        let reset = groups::last_reset(now);
+        groups.retain(|g| g.created >= reset);
         if groups.len() != before {
             write_json(&app.groups_path, &*groups);
         }

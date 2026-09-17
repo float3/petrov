@@ -4,8 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0d0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>Petrov Day</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='42' fill='%23c1121f'/></svg>">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon.svg">
 <style>
 :root {
   --bg: #0b0d0c;
@@ -26,8 +30,10 @@ body {
   min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
 }
-main { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; }
+main { max-width: 720px; margin: 0 auto; padding: 20px 16px 64px; }
 h1, h2, h3 { font-weight: 600; letter-spacing: .02em; margin: 0; }
+h3 { font-size: 15px; margin-bottom: 8px; }
+p { margin: 10px 0; }
 small, .muted { color: var(--muted); }
 small { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; }
 a { color: var(--green); }
@@ -37,167 +43,252 @@ button {
   background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
   padding: 12px 16px; cursor: pointer;
 }
-button:hover { border-color: var(--muted); }
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:disabled { opacity: .5; cursor: not-allowed; }
 button.primary { background: var(--green); color: #07130a; border-color: var(--green); font-weight: 600; }
+button.danger { border-color: var(--red); color: var(--red); }
+button.big { font-size: 20px; padding: 16px 28px; }
 label { display: block; margin: 14px 0 4px; color: var(--muted); font-size: 13px; }
 input, textarea {
-  width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+  width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
 }
 textarea { min-height: 64px; resize: vertical; }
-fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 4px 16px 16px; margin: 16px 0; }
+fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 4px 16px 16px; margin: 16px 0; min-width: 0; }
 legend { padding: 0 6px; color: var(--green); }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.row > div { min-width: 0; }
-.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
-.error { color: var(--red); margin-top: 12px; }
-.links { margin-top: 24px; }
-.link { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 12px 0; }
-.link code { display: block; word-break: break-all; margin: 6px 0 10px; color: var(--green); }
+.row > * { min-width: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin: 16px 0; }
+.error { color: var(--red); }
 .hint { font-size: 13px; color: var(--muted); }
-
-.title { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin: 16px 0; }
+.link { word-break: break-all; color: var(--green); display: block; margin: 6px 0 10px; font-size: 14px; }
+.qr { background: #fff; padding: 12px; border-radius: 8px; width: fit-content; margin: 8px 0; }
+.qr svg { display: block; width: 220px; height: 220px; }
+.title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .title h1 { font-size: 22px; }
+.status-line { font-size: 22px; margin: 32px 0; text-align: center; }
+.ok { color: var(--green); }
+.warn { color: var(--amber); }
+.bad { color: var(--red); }
 
 header.stations { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
 header.stations .right { text-align: right; }
 header.stations h1, header.stations h2 { font-size: 20px; overflow-wrap: anywhere; }
-.conn { font-size: 12px; margin-top: 8px; color: var(--green); }
-.conn.bad { color: var(--amber); }
-.clock { text-align: center; margin: 28px 0 8px; }
-.clock .big { font-size: clamp(44px, 14vw, 88px); font-variant-numeric: tabular-nums; line-height: 1.1; }
+
+#banners { position: sticky; top: 0; z-index: 15; }
+#banners .banner:first-child { margin-top: 8px; }
+.banner {
+  display: block; width: 100%; text-align: center; font-weight: 700; letter-spacing: .06em;
+  padding: 16px; border-radius: 8px; margin: 0 0 12px; border: 2px solid;
+}
+.banner.unlock { background: #2b2107; border-color: var(--amber); color: var(--amber); font-size: 18px; }
+.banner.lost { background: #3a0509; border-color: var(--red); color: #fff; font-size: 26px; animation: pulse 1s steps(2, jump-none) infinite; }
+.banner.background { background: var(--panel); border-color: var(--amber); color: var(--amber); font-weight: 400; letter-spacing: 0; font-size: 14px; }
 
 .alert {
-  border: 2px solid var(--red); border-radius: 10px; padding: 18px; margin: 20px 0; text-align: center;
+  border: 2px solid var(--red); border-radius: 10px; padding: 16px; margin: 16px 0; text-align: center;
   background: #2a0608; animation: pulse 1s steps(2, jump-none) infinite;
 }
-.alert h2 { color: var(--red); font-size: clamp(22px, 6vw, 34px); }
-.alert .big { font-size: clamp(56px, 20vw, 120px); font-variant-numeric: tabular-nums; line-height: 1; margin: 10px 0; color: #fff; }
+.alert.acked { animation: none; }
+.alert h2 { color: var(--red); font-size: clamp(22px, 6vw, 32px); }
+.alert .big { font-size: clamp(56px, 18vw, 110px); font-variant-numeric: tabular-nums; line-height: 1; margin: 8px 0; color: #fff; }
+.alert.done { animation: none; background: var(--panel); border-color: var(--line); }
+.alert.done h2 { color: var(--text); }
 @keyframes pulse { 0% { background: #2a0608; } 100% { background: #5a0b10; } }
 body.alarm { animation: flash 1s steps(2, jump-none) infinite; }
 @keyframes flash { 0% { background: var(--bg); } 100% { background: #1e0406; } }
 
+.outgoing { border: 2px solid var(--amber); border-radius: 10px; padding: 16px; margin: 16px 0; text-align: center; }
+.outgoing h2 { color: var(--amber); font-size: 22px; }
+.outgoing .big { font-size: clamp(44px, 14vw, 80px); font-variant-numeric: tabular-nums; line-height: 1.1; }
+
 .console { text-align: center; margin: 28px 0; }
 .launch {
-  position: relative; overflow: hidden; width: min(280px, 72vw); aspect-ratio: 1; border-radius: 50%;
+  position: relative; overflow: hidden; width: min(260px, 70vw); aspect-ratio: 1; border-radius: 50%;
   border: 6px solid #3a0a0d; background: radial-gradient(circle at 35% 30%, #ff5a5f, var(--red) 45%, var(--red-deep));
   box-shadow: 0 10px 0 #4a070b, 0 18px 40px rgba(229, 56, 59, .25);
-  color: #fff; font-weight: 700; font-size: 20px; letter-spacing: .08em; text-transform: uppercase;
-  touch-action: none; user-select: none; -webkit-user-select: none;
+  color: #fff; font-weight: 700; font-size: 19px; letter-spacing: .08em; text-transform: uppercase;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
-.launch:active { transform: translateY(6px); box-shadow: 0 4px 0 #4a070b; }
-.launch:disabled { filter: grayscale(.85) brightness(.6); cursor: not-allowed; }
+.launch:active:not(:disabled) { transform: translateY(6px); box-shadow: 0 4px 0 #4a070b; }
+.launch:disabled { filter: grayscale(.85) brightness(.6); opacity: 1; }
 .launch .fill { position: absolute; inset: auto 0 0 0; height: 0; background: rgba(0, 0, 0, .45); pointer-events: none; }
 .launch .label { position: relative; pointer-events: none; }
-.cover { margin-top: 12px; }
-.status { margin-top: 18px; min-height: 1.5em; }
-.status.red { color: var(--red); }
+.console .status { margin-top: 16px; min-height: 1.5em; }
 
-.dead { text-align: center; padding: 48px 0 24px; }
-.dead h1 { font-size: clamp(30px, 9vw, 52px); color: var(--red); }
-.dead .consequence { font-size: clamp(20px, 5.5vw, 30px); margin: 24px 0; white-space: pre-wrap; }
-
-ul.log, ol.debrief { list-style: none; padding: 0; margin: 24px 0 0; border-top: 1px solid var(--line); }
-ul.log li, ol.debrief li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; gap: 12px; }
-ul.log time, ol.debrief time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
-.over { margin-top: 32px; }
-.over h2 { color: var(--green); }
-
-.overlay {
-  position: fixed; inset: 0; background: rgba(5, 6, 6, .96); display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; z-index: 10;
+.hit {
+  position: fixed; inset: 0; z-index: 20; background: #120203; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 20px; padding: 24px; text-align: center;
 }
-.overlay p { max-width: 420px; color: var(--muted); }
+.hit h1 { font-size: clamp(34px, 10vw, 64px); color: var(--red); }
+.hit .consequence { font-size: clamp(22px, 6vw, 36px); white-space: pre-wrap; max-width: 900px; overflow-wrap: anywhere; }
+
+ul.plain, ol.plain { list-style: none; padding: 0; margin: 8px 0 0; }
+ol.timeline li, ul.log li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; gap: 12px; }
+ol.timeline time, ul.log time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.reveal h2 { font-size: clamp(24px, 7vw, 36px); margin: 24px 0 8px; }
+.consequences p { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+details { border: 1px solid var(--line); border-radius: 8px; margin: 16px 0; }
+details > summary { cursor: pointer; padding: 14px 16px; }
+details > div { padding: 0 16px 16px; }
+.check { display: grid; grid-template-columns: 1fr auto; gap: 8px 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.check .result { grid-column: 1 / -1; font-size: 14px; }
+.check .buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.check button { padding: 8px 12px; }
 
 @media (max-width: 520px) {
   .row { grid-template-columns: 1fr; gap: 0; }
+  .check { grid-template-columns: 1fr; }
+  .check .buttons { justify-content: flex-start; }
 }
 </style>
 </head>
 <body>
 <main>
-  <section id="create" hidden>
-    <div class="title"><h1>Petrov Day</h1><small>multiplayer</small></div>
-    <p class="muted">Two houses, one red button each. Pressing it sends a missile at the other house, which sees an early warning and gets a short window to retaliate before impact. Early warning systems also produce false alarms that look exactly like real ones.</p>
-    <form id="form">
-      <fieldset>
-        <legend>House A</legend>
-        <label for="nameA">Name</label>
-        <input id="nameA" maxlength="60" placeholder="Hill's house">
-        <label for="consA">What happens if destroyed</label>
-        <textarea id="consA" maxlength="500">The ceremony ends. Everyone leaves in silence.</textarea>
-      </fieldset>
-      <fieldset>
-        <legend>House B</legend>
-        <label for="nameB">Name</label>
-        <input id="nameB" maxlength="60" placeholder="Omar's house">
-        <label for="consB">What happens if destroyed</label>
-        <textarea id="consB" maxlength="500">The ceremony ends. The cake is destroyed.</textarea>
-      </fieldset>
-      <fieldset>
-        <legend>Ceremony</legend>
-        <div class="row">
-          <div><label for="start">Buttons go live</label><input id="start" type="datetime-local" required></div>
-          <div><label for="end">Buttons go dark</label><input id="end" type="datetime-local" required></div>
-        </div>
-        <div class="row">
-          <div><label for="flight">Retaliation window (seconds)</label><input id="flight" type="number" min="10" max="600" value="60" required></div>
-          <div><label for="fa">False alarm chance per house (%)</label><input id="fa" type="number" min="0" max="99" step="any" value="1" required></div>
-        </div>
-        <p class="hint">The chance is for the whole ceremony. Each house's false alarms are drawn independently when the game is created, so nobody, including you, knows whether or when they happen. Times use this device's time zone.</p>
-      </fieldset>
-      <div class="actions">
-        <button class="primary" type="submit">Create game</button>
-        <button type="button" id="drill">Create 10 minute drill</button>
-      </div>
-      <div id="createError" class="error"></div>
-    </form>
-    <div id="links" class="links"></div>
+  <div id="banners">
+    <div id="lostBanner" class="banner lost" hidden>CONNECTION LOST<br><small>reconnecting…</small></div>
+    <button id="unlockBanner" class="banner unlock" hidden>Tap here to enable the siren on this device</button>
+    <div id="backgroundBanner" class="banner background" hidden></div>
+  </div>
+
+  <section id="home" hidden>
+    <div class="title"><h1>Petrov Day</h1><small>a ritual for two countries</small></div>
+    <p>On 26 September 1983, Stanislav Petrov's early warning system reported incoming American missiles. He judged it a false alarm and did not pass it up the chain of command. He was right.</p>
+    <p class="muted">Two groups, two countries. Each can launch one missile at the other. The target sees a warning and a countdown, and may retaliate before impact. Detection systems occasionally raise false alarms. There is no score and no winner. Nothing happening is the good outcome.</p>
+    <div class="actions">
+      <button id="createGame" class="primary big">Create a game</button>
+      <a href="/check">Pre-flight check for this device</a>
+    </div>
+    <p id="createError" class="error"></p>
   </section>
 
-  <section id="house" hidden>
-    <div id="overlay" class="overlay">
-      <h1>Petrov Day</h1>
-      <p>Enter to turn on the alarm sound and keep this screen awake. Leave this device plugged in, unlocked and in the room.</p>
-      <button class="primary" id="enter">Enter</button>
-    </div>
+  <section id="checkPage" hidden>
+    <div class="title"><h1>Pre-flight check</h1></div>
+    <div id="checkPageBody"></div>
+  </section>
 
+  <section id="game" hidden>
+    <div class="title"><h1>Petrov Day</h1><small id="gameStatus"></small></div>
+    <div id="gameSetup" hidden>
+      <p class="hint">Anyone with this game link can change the settings until the game is live. Send each host their claim link. Each claim link works once.</p>
+      <div class="row" id="claims"></div>
+      <form id="settingsForm" autocomplete="off">
+        <div class="row">
+          <fieldset>
+            <legend>Country A</legend>
+            <label for="name0">Name</label>
+            <input id="name0" maxlength="60" data-field="name" data-country="0">
+            <label for="cons0">Consequence when hit</label>
+            <textarea id="cons0" maxlength="500" placeholder="e.g. We destroy our cake" data-field="consequence" data-country="0"></textarea>
+            <label for="rate0">False alarms (% per minute)</label>
+            <input id="rate0" type="number" min="0" max="10" step="any" data-field="rate" data-country="0">
+            <p class="hint" id="estimate0"></p>
+          </fieldset>
+          <fieldset>
+            <legend>Country B</legend>
+            <label for="name1">Name</label>
+            <input id="name1" maxlength="60" data-field="name" data-country="1">
+            <label for="cons1">Consequence when hit</label>
+            <textarea id="cons1" maxlength="500" placeholder="e.g. We destroy our cake" data-field="consequence" data-country="1"></textarea>
+            <label for="rate1">False alarms (% per minute)</label>
+            <input id="rate1" type="number" min="0" max="10" step="any" data-field="rate" data-country="1">
+            <p class="hint" id="estimate1"></p>
+          </fieldset>
+        </div>
+        <fieldset>
+          <legend>Ritual</legend>
+          <div class="row">
+            <div>
+              <label for="flight">Missile flight time and warning window (minutes)</label>
+              <input id="flight" type="number" min="0.17" max="60" step="any">
+            </div>
+            <div>
+              <label for="duration">Expected duration of the evening (minutes)</label>
+              <input id="duration" type="number" min="1" max="1440" step="1">
+            </div>
+          </div>
+          <p class="hint">The expected duration is only used for the false-alarm estimates. The game has no fixed end: it ends when a country requests the end and nothing is in flight.</p>
+        </fieldset>
+        <p id="saveStatus" class="hint"></p>
+      </form>
+    </div>
+    <div id="gameLive" hidden><p class="status-line">The game is live.</p></div>
+    <div id="gameReveal" hidden></div>
+    <p id="gameMissing" class="error" hidden>This game link is not valid. The game may have been deleted.</p>
+  </section>
+
+  <section id="claim" hidden>
+    <div class="title"><h1 id="claimTitle">Claim</h1></div>
+    <div id="claimBody"></div>
+    <div class="actions"><button id="claimButton" class="primary big" hidden>Claim</button></div>
+    <p id="claimError" class="error"></p>
+  </section>
+
+  <section id="country" hidden>
     <header class="stations">
-      <div><small>Your house</small><h1 id="me">…</h1></div>
-      <div class="right"><small>Target</small><h2 id="enemy">…</h2></div>
+      <div><small>Your country</small><h1 id="me">…</h1></div>
+      <div class="right"><small>Other country</small><h2 id="other">…</h2></div>
     </header>
-    <div id="conn" class="conn bad">connecting…</div>
 
-    <div id="notFound" hidden><p class="error">This link does not belong to any game.</p></div>
+    <div id="countryMissing" hidden><p class="error">This country link is not valid. If you lost your country link, set up a new game.</p></div>
 
-    <div id="alive">
-      <div class="clock"><small id="clockLabel"></small><div id="clock" class="big">--:--</div></div>
-
-      <div id="alert" class="alert" hidden>
-        <h2>INCOMING MISSILE DETECTED</h2>
-        <div id="alertCount" class="big">--</div>
-        <div>seconds to impact</div>
-        <p class="muted">Early warning systems have been wrong before.</p>
+    <div id="countrySetup" hidden>
+      <p class="panel">Keep at least one <strong>command center</strong> device per country open, on screen, unlocked and plugged in for the whole ritual. Run the pre-flight check below on it.</p>
+      <div class="panel">
+        <h3>Countries</h3>
+        <ul class="plain" id="readiness"></ul>
       </div>
+      <div class="actions">
+        <button id="startButton" class="primary big">Start</button>
+      </div>
+      <p class="hint" id="startHint"></p>
+      <div id="setupSettings"></div>
+    </div>
 
+    <div id="countryLive" hidden>
+      <div id="warnings"></div>
+      <div id="outgoing"></div>
       <div class="console">
-        <button id="launch" class="launch" disabled><span class="fill"></span><span class="label" id="launchLabel">Launch</span></button>
-        <div><button id="cover" class="cover">Lift safety cover</button></div>
-        <div id="status" class="status"></div>
+        <button id="launch" class="launch" disabled><span class="fill"></span><span class="label" id="launchLabel">Locked</span></button>
+        <div class="actions" style="justify-content:center"><button id="cover">Lift safety cover</button></div>
+        <div class="status" id="launchStatus"></div>
       </div>
+      <div class="panel">
+        <div id="endIdle">
+          <button id="endButton">Request the end</button>
+          <p class="hint">The end takes effect once nothing is in flight. A request cannot be withdrawn, and afterwards your country can only launch while a warning is on screen.</p>
+        </div>
+        <div id="endConfirm" hidden>
+          <p>Request the end of the ritual? This cannot be withdrawn.</p>
+          <div class="actions"><button id="endYes" class="danger">Yes, request the end</button><button id="endNo">Cancel</button></div>
+        </div>
+        <p id="endWaiting" hidden>You requested the end. Waiting for the world to settle…</p>
+      </div>
+      <ul class="plain log" id="log"></ul>
     </div>
 
-    <div id="dead" class="dead" hidden>
-      <h1>Your house was destroyed</h1>
-      <div id="consequence" class="consequence"></div>
-    </div>
+    <div id="countryReveal" hidden></div>
 
-    <ul id="log" class="log"></ul>
+    <details id="shareBox">
+      <summary>Share this country with your citizens</summary>
+      <div>
+        <p class="hint">Anyone with this link is your country, on any number of devices. Every device can start, launch and request the end.</p>
+        <a class="link" id="countryLink"></a>
+        <div class="actions"><button id="copyCountryLink">Copy link</button></div>
+        <div class="qr" id="countryQr"></div>
+      </div>
+    </details>
+    <details id="checkBox">
+      <summary>Pre-flight check for this device</summary>
+      <div id="checkBoxBody"></div>
+    </details>
 
-    <div id="over" class="over" hidden>
-      <h2 id="overTitle">Petrov Day is over</h2>
-      <ol id="debrief" class="debrief"></ol>
+    <div id="hit" class="hit" hidden>
+      <h1>Your country was hit</h1>
+      <div class="consequence" id="hitConsequence"></div>
+      <button id="hitClose">Show the rest</button>
     </div>
-    <p class="actions"><button id="testSound" type="button">Test alarm sound</button></p>
   </section>
 </main>
 <script>
@@ -205,16 +296,15 @@ const $ = (id) => document.getElementById(id);
 const HOLD_MS = 3000;
 
 function pad(n) { return String(n).padStart(2, "0"); }
-function clock(ms) {
+function countdown(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
   const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
-  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${pad(m)}:${pad(s % 60)}`;
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 function timeOfDay(t) { return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
-function localInput(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
+  node.append(...children.filter((c) => c !== null && c !== undefined));
   return node;
 }
 function store(key, fallback) {
@@ -223,6 +313,41 @@ function store(key, fallback) {
 function persist(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
 }
+async function api(method, url, body) {
+  const res = await fetch(url, {
+    method,
+    headers: body === undefined ? {} : { "content-type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const err = new Error(await res.text());
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+async function copy(button, text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    button.textContent = "Copied";
+  } catch {
+    button.textContent = "Copy failed, select the link instead";
+  }
+  setTimeout(() => { button.textContent = "Copy link"; }, 2000);
+}
+async function showQr(container, text) {
+  try {
+    const res = await fetch("/api/qr", { method: "POST", body: text });
+    if (res.ok) container.innerHTML = await res.text();
+  } catch {}
+}
+function falseAlarmChance(percentPerMinute, minutes) {
+  return 1 - Math.exp(-(percentPerMinute / 100) * minutes);
+}
+function percent(p) {
+  const v = p * 100;
+  return v >= 10 ? `${v.toFixed(0)}%` : v >= 1 ? `${v.toFixed(1)}%` : `${v.toFixed(2)}%`;
+}
 
 const sound = {
   ctx: null,
@@ -230,9 +355,17 @@ const sound = {
   unlock() {
     try {
       this.ctx ??= new (window.AudioContext || window.webkitAudioContext)();
-      this.ctx.resume();
+      if (this.ctx.state !== "running") {
+        this.ctx.resume();
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.ctx.createBuffer(1, 1, 22050);
+        src.connect(this.ctx.destination);
+        src.start();
+      }
     } catch {}
+    keepAwake();
   },
+  unlocked() { return !!this.ctx && this.ctx.state === "running"; },
   alarm(on) {
     const c = this.ctx;
     if (!c) return;
@@ -242,7 +375,7 @@ const sound = {
       osc.frequency.value = 820;
       lfo.frequency.value = 0.9;
       depth.gain.value = 340;
-      gain.gain.value = 0.22;
+      gain.gain.value = 0.25;
       lfo.connect(depth).connect(osc.frequency);
       osc.connect(gain).connect(c.destination);
       osc.start();
@@ -254,20 +387,32 @@ const sound = {
       this.siren = null;
     }
   },
-  boom(volume = 1) {
+  beep() {
+    const c = this.ctx;
+    if (!c) return;
+    const osc = c.createOscillator(), gain = c.createGain();
+    osc.type = "square";
+    osc.frequency.value = 440;
+    gain.gain.setValueAtTime(0.2, c.currentTime);
+    gain.gain.setValueAtTime(0, c.currentTime + 0.25);
+    osc.connect(gain).connect(c.destination);
+    osc.start();
+    osc.stop(c.currentTime + 0.3);
+  },
+  boom() {
     const c = this.ctx;
     if (!c) return;
     const len = c.sampleRate * 3, buf = c.createBuffer(1, len, c.sampleRate), data = buf.getChannelData(0);
     for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
-    const src = c.createBufferSource(), filter = c.createBiquadFilter(), gain = c.createGain();
+    const src = c.createBufferSource(), filter = c.createBiquadFilter();
     src.buffer = buf;
     filter.type = "lowpass";
     filter.frequency.value = 500;
-    gain.gain.value = volume;
-    src.connect(filter).connect(gain).connect(c.destination);
+    src.connect(filter).connect(c.destination);
     src.start();
   },
 };
+document.addEventListener("pointerdown", () => sound.unlock(), { capture: true });
 
 let wakeLock = null;
 async function keepAwake() {
@@ -277,149 +422,378 @@ async function keepAwake() {
       wakeLock.addEventListener("release", () => { wakeLock = null; });
     }
   } catch {}
+  return !!wakeLock;
 }
 document.addEventListener("visibilitychange", keepAwake);
 
-function createPage() {
-  $("create").hidden = false;
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 19, 30);
-  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 20, 30);
-  $("start").value = localInput(start);
-  $("end").value = localInput(end);
-
-  const games = store("petrov-games", []);
-  games.forEach(showLinks);
-
-  async function create(body) {
-    $("createError").textContent = "";
+function subscribe(snapshotUrl, eventsUrl, onView, onMissing) {
+  const state = { offset: 0, lastMessage: 0, source: null, open: false, closedAt: null };
+  function accept(envelope) {
+    state.offset = envelope.now - Date.now();
+    state.lastMessage = Date.now();
+    onView(envelope.view);
+  }
+  async function connect() {
     try {
-      const res = await fetch("/api/games", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) throw new Error(await res.text());
-      const game = { ...(await res.json()), start: body.start, end: body.end };
-      games.unshift(game);
-      persist("petrov-games", games.slice(0, 20));
-      showLinks(game, true);
+      accept(await api("GET", snapshotUrl));
     } catch (e) {
-      $("createError").textContent = e.message;
+      if (e.status === 404) return onMissing();
+      return setTimeout(connect, 2000);
     }
+    const source = new EventSource(eventsUrl);
+    state.source = source;
+    source.onopen = () => { state.open = true; state.closedAt = null; };
+    source.onmessage = (e) => { state.open = true; state.closedAt = null; accept(JSON.parse(e.data)); };
+    source.onerror = () => {
+      state.open = false;
+      state.closedAt ??= Date.now();
+      if (source.readyState === EventSource.CLOSED) {
+        source.close();
+        setTimeout(connect, 2000);
+      }
+    };
   }
-
-  function houses() {
-    return [
-      { name: $("nameA").value || $("nameA").placeholder, consequence: $("consA").value },
-      { name: $("nameB").value || $("nameB").placeholder, consequence: $("consB").value },
-    ];
-  }
-
-  $("form").addEventListener("submit", (e) => {
-    e.preventDefault();
-    create({
-      start: new Date($("start").value).getTime(),
-      end: new Date($("end").value).getTime(),
-      flight_secs: Number($("flight").value),
-      false_alarm_chance: Number($("fa").value),
-      houses: houses(),
-    });
-  });
-
-  $("drill").addEventListener("click", () => {
-    const now = Date.now();
-    create({ start: now + 30_000, end: now + 630_000, flight_secs: 20, false_alarm_chance: 50, houses: houses() });
-  });
-
-  function showLinks(game, fresh) {
-    const box = el("div", { className: "link" },
-      el("div", {}, el("small", {}, `${new Date(game.start).toLocaleString()} – ${timeOfDay(game.end)}`)));
-    for (const h of game.houses) {
-      const url = `${location.origin}/h/${h.key}`;
-      const copy = el("button", { type: "button", textContent: "Copy link" });
-      copy.addEventListener("click", async () => {
-        try { await navigator.clipboard.writeText(url); copy.textContent = "Copied"; } catch { copy.textContent = "Copy failed"; }
-      });
-      box.append(el("div", {}, el("strong", {}, h.name), el("code", {}, url), copy, " ", el("a", { href: url, target: "_blank", textContent: "Open" })));
-    }
-    box.append(el("p", { className: "hint", textContent: "Each link is secret and controls that house's button. Open it on the device that stays in that house." }));
-    if (fresh) $("links").prepend(box); else $("links").append(box);
-  }
+  connect();
+  return {
+    now: () => Date.now() + state.offset,
+    connected: () => state.lastMessage > 0 && Date.now() - state.lastMessage < 8000 && !(state.closedAt && Date.now() - state.closedAt > 3000),
+    accept,
+  };
 }
 
-function housePage(key) {
-  $("house").hidden = false;
-  let view = null, offset = 0, lastMessage = 0, armed = false, disarmTimer = null, holding = null, notice = null;
-  const seen = { destroyed: null, enemyDestroyed: null, outcomes: new Map(), first: true };
-  const now = () => Date.now() + offset;
+function renderSettingsSummary(container, names, settings) {
+  const minutes = settings.expected_minutes;
+  container.replaceChildren(el("div", { className: "panel consequences" },
+    el("h3", { textContent: "Settings" }),
+    el("p", { textContent: `Missile flight time and warning window: ${countdown(settings.flight_secs * 1000)}` }),
+    ...[0, 1].map((c) => el("div", {},
+      el("p", {}, el("strong", { textContent: names[c] }),
+        ` · false alarms ${settings.false_alarm_percent_per_minute[c]}% per minute (≈ ${percent(falseAlarmChance(settings.false_alarm_percent_per_minute[c], minutes))} over ${minutes} minutes)`),
+      el("p", { className: "muted", textContent: `When hit: ${settings.consequences[c].trim() || "(no consequence set)"}` }),
+    )),
+  ));
+}
 
-  $("enter").addEventListener("click", () => {
-    sound.unlock();
-    keepAwake();
-    $("overlay").hidden = true;
-  });
-  $("testSound").addEventListener("click", () => {
-    sound.unlock();
-    sound.alarm(true);
-    setTimeout(() => sound.alarm(false), 2000);
-  });
+function renderReveal(container, reveal, names, settings) {
+  container.replaceChildren(el("div", { className: "reveal" },
+    el("small", { textContent: "Game over" }),
+    el("h2", { textContent: reveal.headline }),
+    el("ol", { className: "plain timeline" }, ...reveal.timeline.map((e) =>
+      el("li", {}, el("time", { textContent: timeOfDay(e.t) }), el("span", { textContent: e.text })))),
+    names && settings ? el("div", { className: "panel consequences" },
+      el("h3", { textContent: "Consequences" }),
+      ...[0, 1].map((c) => el("p", {}, el("strong", { textContent: `${names[c]}: ` }), settings.consequences[c].trim() || "(none)"))) : null,
+  ));
+}
 
-  function accept(envelope) {
-    offset = envelope.now - Date.now();
-    view = envelope.view;
-    lastMessage = Date.now();
-    react();
-    render();
+function preflight(container, connectionCheck) {
+  const rows = [];
+  function row(name, run) {
+    const result = el("div", { className: "result muted", textContent: "Not checked yet." });
+    const buttons = el("div", { className: "buttons" });
+    const node = el("div", { className: "check" }, el("strong", { textContent: name }), buttons, result);
+    const set = (cls, text) => { result.className = `result ${cls}`; result.textContent = text; };
+    const ask = (question, yes, no) => {
+      buttons.replaceChildren(
+        el("button", { textContent: "Yes", onclick: () => { reset(); yes(); } }),
+        el("button", { textContent: "No", onclick: () => { reset(); no(); } }),
+      );
+      set("warn", question);
+    };
+    const reset = () => buttons.replaceChildren(el("button", { textContent: "Test", onclick: () => run({ set, ask }) }));
+    reset();
+    rows.push(node);
   }
 
+  row("Siren", ({ set, ask }) => {
+    sound.unlock();
+    if (!sound.ctx) return set("bad", "This browser cannot play audio.");
+    sound.alarm(true);
+    setTimeout(() => {
+      sound.alarm(false);
+      ask("Did you hear the siren?", () => set("ok", "Siren works."),
+        () => set("bad", "Turn up the volume and check the silent switch. On iPhones the ring/silent switch mutes web audio."));
+    }, 2500);
+  });
+  row("Screen stays awake", async ({ set }) => {
+    if (await keepAwake()) set("ok", "The screen will stay awake while this page is visible.");
+    else set("warn", "Not supported here. Set the screen timeout to never and keep the device plugged in.");
+  });
+  row("Fullscreen", async ({ set }) => {
+    const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+    try {
+      await document.documentElement.requestFullscreen();
+      set("ok", "Fullscreen works. Press Escape or swipe to leave it.");
+    } catch {
+      if (standalone) set("ok", "Running as an installed app.");
+      else set("warn", "Not supported here. On an iPhone, use Share → Add to Home Screen and open the page from there.");
+    }
+  });
+  row("Vibration", ({ set, ask }) => {
+    if (!navigator.vibrate || !navigator.vibrate([400, 150, 400, 150, 400])) {
+      return set("warn", "Not supported on this device (iPhones never vibrate for web pages). Rely on the siren.");
+    }
+    setTimeout(() => ask("Did the device vibrate?", () => set("ok", "Vibration works."),
+      () => set("warn", "No vibration. Rely on the siren.")), 1500);
+  });
+  row("Connection", async ({ set }) => {
+    const started = performance.now();
+    try {
+      const { now } = await api("GET", "/api/time");
+      const rtt = performance.now() - started;
+      const skew = Math.abs(now - Date.now()) / 1000;
+      const extra = connectionCheck ? ` ${connectionCheck()}` : "";
+      set("ok", `Server reachable in ${Math.round(rtt)} ms. This device's clock is ${skew.toFixed(1)} s off, which does not matter: all timing comes from the server.${extra}`);
+    } catch {
+      set("bad", "Cannot reach the server. Check the network.");
+    }
+  });
+
+  container.replaceChildren(
+    el("p", { className: "hint", textContent: "Keep at least one command center device per country open, on screen, unlocked and plugged in for the whole ritual. Phones may not sound alarms while locked or in the background." }),
+    ...rows,
+  );
+}
+
+function homePage() {
+  $("home").hidden = false;
+  $("createGame").addEventListener("click", async () => {
+    $("createGame").disabled = true;
+    try {
+      const { game } = await api("POST", "/api/games");
+      location.href = `/g/${game}`;
+    } catch (e) {
+      $("createError").textContent = e.message;
+      $("createGame").disabled = false;
+    }
+  });
+}
+
+function checkPage() {
+  $("checkPage").hidden = false;
+  preflight($("checkPageBody"));
+}
+
+function gamePage(key) {
+  $("game").hidden = false;
+  let view = null, dirty = false, saving = false, debounce = null;
+  const inputs = [...$("settingsForm").querySelectorAll("input, textarea")];
+
+  function formSettings() {
+    const s = structuredClone(view.setup.settings);
+    for (const c of [0, 1]) {
+      s.names[c] = $(`name${c}`).value;
+      s.consequences[c] = $(`cons${c}`).value;
+      const rate = Number($(`rate${c}`).value);
+      s.false_alarm_percent_per_minute[c] = Number.isFinite(rate) ? rate : 0;
+    }
+    s.flight_secs = Math.round(Number($("flight").value) * 60);
+    s.expected_minutes = Math.round(Number($("duration").value));
+    return s;
+  }
+
+  function fillForm(s) {
+    const values = {
+      name0: s.names[0], name1: s.names[1], cons0: s.consequences[0], cons1: s.consequences[1],
+      rate0: s.false_alarm_percent_per_minute[0], rate1: s.false_alarm_percent_per_minute[1],
+      flight: +(s.flight_secs / 60).toFixed(3), duration: s.expected_minutes,
+    };
+    for (const input of inputs) {
+      if (input === document.activeElement) continue;
+      if (String(input.value) !== String(values[input.id])) input.value = values[input.id];
+    }
+  }
+
+  function estimates() {
+    const minutes = Number($("duration").value) || 0;
+    for (const c of [0, 1]) {
+      const rate = Number($(`rate${c}`).value) || 0;
+      const name = $(`name${c}`).value.trim() || ["Country A", "Country B"][c];
+      $(`estimate${c}`).textContent = `≈ ${percent(falseAlarmChance(rate, minutes))} chance of at least one false alarm at ${name} over ${minutes} minutes.`;
+    }
+  }
+
+  async function save() {
+    if (saving) { dirty = true; return; }
+    saving = true;
+    dirty = false;
+    $("saveStatus").textContent = "Saving…";
+    try {
+      sub.accept(await api("PUT", `/api/g/${key}/settings`, formSettings()));
+      $("saveStatus").textContent = "Saved. Both countries see the change live and have to press Start again.";
+      $("saveStatus").className = "hint";
+    } catch (e) {
+      $("saveStatus").textContent = e.message;
+      $("saveStatus").className = "error";
+    }
+    saving = false;
+    if (dirty) save();
+  }
+
+  $("settingsForm").addEventListener("input", () => {
+    estimates();
+    dirty = true;
+    clearTimeout(debounce);
+    debounce = setTimeout(save, 600);
+  });
+  $("settingsForm").addEventListener("submit", (e) => e.preventDefault());
+
+  const claimCards = [0, 1].map((c) => {
+    const card = el("div", { className: "panel" });
+    $("claims").append(card);
+    return { card, token: null };
+  });
+
+  function renderClaims(setup) {
+    setup.countries.forEach((slot, c) => {
+      const entry = claimCards[c];
+      if (slot.claim_token && entry.token === slot.claim_token) {
+        entry.card.querySelector("h3").textContent = slot.name;
+        return;
+      }
+      entry.token = slot.claim_token;
+      if (slot.claim_token) {
+        const url = `${location.origin}/c/${slot.claim_token}`;
+        const qr = el("div", { className: "qr", hidden: true });
+        const copyButton = el("button", { textContent: "Copy link" });
+        copyButton.onclick = () => copy(copyButton, url);
+        const qrButton = el("button", { textContent: "QR code" });
+        qrButton.onclick = () => { qr.hidden = !qr.hidden; if (!qr.hidden && !qr.firstChild) showQr(qr, url); };
+        entry.card.replaceChildren(
+          el("h3", { textContent: slot.name }),
+          el("small", { textContent: "Claim link, works once" }),
+          el("a", { className: "link", href: url, textContent: url }),
+          el("div", { className: "actions" }, copyButton, qrButton),
+          qr,
+        );
+      } else {
+        entry.card.replaceChildren(
+          el("h3", { textContent: slot.name }),
+          el("p", { className: "ok", textContent: slot.started ? "Claimed · pressed Start" : "Claimed · not started" }),
+        );
+      }
+    });
+  }
+
+  const sub = subscribe(`/api/g/${key}`, `/api/g/${key}/events`, (v) => {
+    view = v;
+    $("gameStatus").textContent = { setup: "not started", live: "live", over: "over" }[v.status];
+    $("gameSetup").hidden = v.status !== "setup";
+    $("gameLive").hidden = v.status !== "live";
+    $("gameReveal").hidden = v.status !== "over";
+    if (v.setup) {
+      if (!dirty && !saving) fillForm(v.setup.settings);
+      renderClaims(v.setup);
+      estimates();
+    }
+    if (v.reveal) renderReveal($("gameReveal"), v.reveal);
+  }, () => { $("gameMissing").hidden = false; });
+}
+
+function claimPage(token) {
+  $("claim").hidden = false;
+  api("GET", `/api/claim/${token}`).then(({ view }) => {
+    const name = view.names[view.country], other = view.names[1 - view.country];
+    $("claimTitle").textContent = view.claimed ? "Claim link used" : `Claim ${name}`;
+    if (view.claimed) {
+      $("claimBody").replaceChildren(el("p", { textContent: `${name} has already been claimed. Ask its host for the country link. If it is lost, set up a new game.` }));
+      return;
+    }
+    const summary = el("div");
+    renderSettingsSummary(summary, view.names, view.settings);
+    $("claimBody").replaceChildren(
+      el("p", { textContent: `You are about to become the host of ${name} in a Petrov Day ritual with ${other}. You will get a country link to share with your citizens.` }),
+      summary,
+    );
+    $("claimButton").textContent = `Claim ${name}`;
+    $("claimButton").hidden = false;
+  }).catch((e) => {
+    $("claimTitle").textContent = "Claim link not valid";
+    $("claimError").textContent = e.status === 404 ? "This claim link does not belong to any game." : e.message;
+  });
+
+  $("claimButton").addEventListener("click", async () => {
+    $("claimButton").disabled = true;
+    try {
+      const { country } = await api("POST", `/api/claim/${token}`);
+      location.replace(`/k/${country}`);
+    } catch (e) {
+      $("claimError").textContent = e.message;
+      $("claimButton").disabled = false;
+    }
+  });
+}
+
+function countryPage(key) {
+  $("country").hidden = false;
+  let view = null, armed = false, disarmTimer = null, holding = null, notice = null, confirmingEnd = false;
+  let hiddenSince = null;
+  const acked = new Set(store(`petrov-acked-${key}`, []));
+  const seen = { first: true, warnings: new Set(), destroyed: null, impact: false };
+  const warningCards = new Map();
+
+  const url = `${location.origin}/k/${key}`;
+  $("countryLink").href = url;
+  $("countryLink").textContent = url;
+  $("copyCountryLink").onclick = () => copy($("copyCountryLink"), url);
+  $("shareBox").addEventListener("toggle", () => { if ($("shareBox").open && !$("countryQr").firstChild) showQr($("countryQr"), url); });
+  preflight($("checkBoxBody"), () => sub.connected() ? "Live updates are connected." : "Live updates are NOT connected.");
+
+  $("unlockBanner").onclick = () => { sound.unlock(); render(); };
+  $("hitClose").onclick = () => { persist(`petrov-hit-closed-${key}`, true); render(); };
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      hiddenSince = Date.now();
+    } else if (hiddenSince && view && view.status === "live") {
+      $("backgroundBanner").textContent = `This device was in the background for ${countdown(Date.now() - hiddenSince)}. Alarms may not have sounded during that time. Tap to dismiss.`;
+      $("backgroundBanner").hidden = false;
+      hiddenSince = null;
+    }
+  });
+  $("backgroundBanner").onclick = () => { $("backgroundBanner").hidden = true; };
+
+  const sub = subscribe(`/api/k/${key}`, `/api/k/${key}/events`, (v) => {
+    view = v;
+    react();
+    render();
+  }, () => {
+    $("countryMissing").hidden = false;
+    $("shareBox").hidden = true;
+  });
+
   function react() {
+    const fresh = view.warnings.filter((w) => !seen.warnings.has(w.id));
+    fresh.forEach((w) => seen.warnings.add(w.id));
+    const impact = !!(view.outgoing && sub.now() >= view.outgoing.impact);
     if (seen.first) {
       seen.first = false;
       seen.destroyed = view.destroyed;
-      seen.enemyDestroyed = view.enemy_destroyed;
-      for (const w of view.warnings) seen.outcomes.set(w.detected, w.outcome);
+      seen.impact = impact;
       return;
     }
-    if (view.destroyed && !seen.destroyed) sound.boom(1);
-    if (view.enemy_destroyed && !seen.enemyDestroyed) sound.boom(0.35);
+    if (view.destroyed && !seen.destroyed) sound.boom();
     seen.destroyed = view.destroyed;
-    seen.enemyDestroyed = view.enemy_destroyed;
-    for (const w of view.warnings) {
-      if (!seen.outcomes.has(w.detected) && !w.outcome && navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
-      seen.outcomes.set(w.detected, w.outcome);
-    }
+    seen.impact = impact;
   }
 
-  function connect() {
-    fetch(`/api/h/${key}`).then(async (res) => {
-      if (res.status === 404) {
-        $("notFound").hidden = false;
-        $("alive").hidden = true;
-        $("overlay").hidden = true;
-        $("conn").hidden = true;
-        return;
-      }
-      if (res.ok) accept(await res.json());
-      const source = new EventSource(`/api/h/${key}/events`);
-      source.onmessage = (e) => accept(JSON.parse(e.data));
-    }).catch(() => setTimeout(connect, 3000));
+  function post(action, pending) {
+    notice = { text: pending, until: Date.now() + 10_000 };
+    render();
+    return api("POST", `/api/k/${key}/${action}`)
+      .then((envelope) => { notice = null; sub.accept(envelope); })
+      .catch((e) => { notice = { text: e.message, until: Date.now() + 8_000, error: true }; render(); });
   }
 
-  function disarm() {
-    armed = false;
+  $("startButton").onclick = () => post("start", "Starting…");
+
+  $("cover").onclick = () => {
+    armed = !armed;
     clearTimeout(disarmTimer);
+    if (armed) disarmTimer = setTimeout(() => { armed = false; render(); }, 20_000);
     cancelHold();
     render();
-  }
-
-  $("cover").addEventListener("click", () => {
-    if (armed) return disarm();
-    armed = true;
-    clearTimeout(disarmTimer);
-    disarmTimer = setTimeout(disarm, 20_000);
-    render();
-  });
+  };
 
   const button = $("launch");
   function cancelHold() {
@@ -430,8 +804,7 @@ function housePage(key) {
   }
   button.addEventListener("pointerdown", (e) => {
     if (button.disabled) return;
-    sound.unlock();
-    button.setPointerCapture(e.pointerId);
+    try { button.setPointerCapture(e.pointerId); } catch {}
     const began = performance.now();
     holding = { frame: 0 };
     const tick = () => {
@@ -440,7 +813,9 @@ function housePage(key) {
       button.querySelector(".fill").style.height = `${p * 100}%`;
       if (p >= 1) {
         cancelHold();
-        fire();
+        armed = false;
+        clearTimeout(disarmTimer);
+        post("launch", "Launching…");
       } else {
         holding.frame = requestAnimationFrame(tick);
       }
@@ -450,105 +825,156 @@ function housePage(key) {
   for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) button.addEventListener(ev, cancelHold);
   button.addEventListener("contextmenu", (e) => e.preventDefault());
 
-  async function fire() {
-    armed = false;
-    clearTimeout(disarmTimer);
-    notice = { text: "Launching…", until: Date.now() + 10_000 };
-    render();
-    try {
-      const res = await fetch(`/api/h/${key}/launch`, { method: "POST" });
-      if (!res.ok) throw new Error(await res.text());
-      notice = null;
-      accept(await res.json());
-    } catch (e) {
-      notice = { text: `Launch failed: ${e.message}`, until: Date.now() + 8_000 };
-      render();
+  $("endButton").onclick = () => { confirmingEnd = true; render(); };
+  $("endNo").onclick = () => { confirmingEnd = false; render(); };
+  $("endYes").onclick = () => { confirmingEnd = false; post("end", "Requesting the end…"); };
+
+  function warningCard(w) {
+    let card = warningCards.get(w.id);
+    if (!card) {
+      const count = el("div", { className: "big" });
+      const label = el("div");
+      const title = el("h2");
+      const detail = el("p", { className: "muted" });
+      const ack = el("button", { textContent: "Acknowledge (silence this device)" });
+      ack.onclick = () => {
+        acked.add(w.id);
+        persist(`petrov-acked-${key}`, [...acked]);
+        render();
+      };
+      card = { node: el("div", { className: "alert" }, title, count, label, detail, el("div", { className: "actions", style: "justify-content:center" }, ack)), count, label, title, detail, ack };
+      warningCards.set(w.id, card);
     }
+    const now = sub.now();
+    const done = !!w.result;
+    card.node.classList.toggle("done", done);
+    card.node.classList.toggle("acked", acked.has(w.id));
+    card.title.textContent = done ? (w.result === "impact" ? "IMPACT" : "No impact – detection system malfunction") : "INCOMING MISSILE";
+    card.count.textContent = done ? "" : countdown(w.ends - now);
+    card.count.hidden = done;
+    card.label.textContent = done ? "" : `until impact · detected ${timeOfDay(w.detected)}`;
+    card.detail.textContent = done ? `Warning detected ${timeOfDay(w.detected)}.` : "";
+    card.ack.hidden = done || acked.has(w.id);
+    return card.node;
   }
 
+  let lastBeep = 0, lastVibrate = 0;
   function render() {
-    const connected = Date.now() - lastMessage < 25_000;
-    $("conn").textContent = connected ? "● connected" : "○ reconnecting…";
-    $("conn").classList.toggle("bad", !connected);
+    const connected = sub.connected();
+    const loaded = !!view;
+    $("lostBanner").hidden = !loaded || connected || view.status === "over";
+    $("unlockBanner").hidden = !loaded || sound.unlocked() || view.status === "over";
     if (!view) return;
 
-    const t = now();
-    $("me").textContent = view.me;
-    $("enemy").textContent = view.enemy_destroyed ? `${view.enemy} (destroyed)` : view.enemy;
-    document.title = `Petrov Day · ${view.me}`;
+    const now = sub.now();
+    const { names, me } = view;
+    $("me").textContent = names[me];
+    $("other").textContent = names[1 - me];
+    document.title = `Petrov Day · ${names[me]}`;
 
-    const incoming = view.destroyed ? null : view.warnings.find((w) => !w.outcome);
-    sound.alarm(!!incoming);
-    document.body.classList.toggle("alarm", !!incoming);
-    $("alert").hidden = !incoming;
-    if (incoming) $("alertCount").textContent = Math.max(0, Math.ceil((incoming.impact - t) / 1000));
+    $("countrySetup").hidden = view.status !== "setup";
+    $("countryLive").hidden = view.status !== "live";
+    $("countryReveal").hidden = view.status !== "over";
 
-    $("alive").hidden = !!view.destroyed;
-    $("dead").hidden = !view.destroyed;
-    $("consequence").textContent = view.consequence;
-
-    if (view.phase === "pending") {
-      $("clockLabel").textContent = `Buttons go live at ${timeOfDay(view.start)}`;
-      $("clock").textContent = clock(view.start - t);
-    } else if (view.phase === "active") {
-      $("clockLabel").textContent = `Buttons go dark at ${timeOfDay(view.end)}`;
-      $("clock").textContent = clock(view.end - t);
-    } else {
-      $("clockLabel").textContent = "Ceremony over";
-      $("clock").textContent = "00:00";
+    if (view.status === "setup") {
+      const [mine, theirs] = [view.countries[me], view.countries[1 - me]];
+      $("readiness").replaceChildren(...[mine, theirs].map((c, i) => el("li", {},
+        el("strong", { textContent: `${c.name}${i === 0 ? " (you)" : ""}: ` }),
+        el("span", { className: c.started ? "ok" : c.claimed ? "warn" : "muted", textContent: c.started ? "pressed Start" : c.claimed ? "claimed, not started" : "not claimed yet" }))));
+      $("startButton").disabled = mine.started;
+      $("startButton").textContent = mine.started ? "Started" : "Start";
+      $("startHint").textContent = notice && Date.now() < notice.until ? notice.text
+        : mine.started ? `Waiting for ${theirs.name}. The game goes live when both countries have pressed Start. Changing the settings resets Start.`
+        : "Press Start when your country is gathered and ready. The game goes live when both countries have pressed Start.";
+      renderSettingsSummary($("setupSettings"), names, view.settings);
     }
 
-    if (!view.can_launch) armed = false;
-    button.disabled = !view.can_launch || !armed;
-    $("cover").hidden = !view.can_launch;
-    $("cover").textContent = armed ? "Close safety cover" : "Lift safety cover";
-    $("launchLabel").textContent = !view.can_launch ? (view.launched ? "Launched" : "Locked")
-      : !armed ? "Covered"
-      : incoming ? "Hold to retaliate" : "Hold to launch";
+    const active = view.status === "live" ? view.warnings.filter((w) => !w.result) : [];
+    const sounding = active.filter((w) => !acked.has(w.id) && !view.destroyed);
 
-    const status = $("status");
-    status.classList.remove("red");
-    if (view.launched && !view.enemy_destroyed) {
-      status.textContent = `Missile in flight to ${view.enemy}. Impact in ${Math.max(0, Math.ceil((view.my_impact - t) / 1000))}s.`;
-      status.classList.add("red");
-    } else if (view.enemy_destroyed) {
-      status.textContent = `Your missile destroyed ${view.enemy}.`;
-      status.classList.add("red");
-    } else if (notice && Date.now() < notice.until) {
-      status.textContent = notice.text;
-    } else if (armed) {
-      status.textContent = `Hold the button for ${HOLD_MS / 1000} seconds to launch at ${view.enemy}.`;
-    } else if (view.phase === "pending") {
-      status.textContent = "The button is locked until the ceremony starts.";
-    } else {
-      status.textContent = "";
+    if (view.status === "live") {
+      const visible = view.warnings.filter((w) => !w.result || now < w.ends + 60_000);
+      const cards = visible.map(warningCard);
+      const container = $("warnings");
+      if (cards.length !== container.children.length || cards.some((c, i) => container.children[i] !== c)) container.replaceChildren(...cards);
+
+      if (view.outgoing) {
+        const hit = now >= view.outgoing.impact;
+        $("outgoing").replaceChildren(el("div", { className: "outgoing" },
+          el("h2", { textContent: hit ? `Impact confirmed on ${names[1 - me]}` : `Missile in flight to ${names[1 - me]}` }),
+          hit ? null : el("div", { className: "big", textContent: countdown(view.outgoing.impact - now) }),
+          el("p", { className: "muted", textContent: `Launched ${timeOfDay(view.outgoing.launched)}.` })));
+      } else {
+        $("outgoing").replaceChildren();
+      }
+
+      if (!view.can_launch) armed = false;
+      button.disabled = !view.can_launch || !armed;
+      $("cover").hidden = !view.can_launch;
+      $("cover").textContent = armed ? "Close safety cover" : "Lift safety cover";
+      const retaliate = active.length > 0;
+      $("launchLabel").textContent = !view.can_launch ? (view.outgoing ? "Launched" : view.destroyed ? "Destroyed" : "Locked")
+        : !armed ? "Covered" : retaliate ? "Hold to retaliate" : "Hold to launch";
+      const status = $("launchStatus");
+      status.className = "status";
+      if (notice && Date.now() < notice.until) {
+        status.textContent = notice.text;
+        if (notice.error) status.classList.add("bad");
+      } else if (armed && view.can_launch) {
+        status.textContent = `Hold the button for ${HOLD_MS / 1000} seconds to launch at ${names[1 - me]}. There is no recall.`;
+        status.classList.add("bad");
+      } else if (!view.can_launch && view.end_requested && !view.outgoing && !view.destroyed) {
+        status.textContent = "After requesting the end, you can only launch while a warning is on screen.";
+      } else {
+        status.textContent = "";
+      }
+
+      $("endIdle").hidden = !!view.end_requested || confirmingEnd;
+      $("endConfirm").hidden = !!view.end_requested || !confirmingEnd;
+      $("endWaiting").hidden = !view.end_requested;
+
+      const entries = [[view.live_at, "The game went live."]];
+      for (const w of view.warnings) {
+        if (!w.result) continue;
+        entries.push([w.detected, `Warning: incoming missile. ${w.result === "impact" ? "Impact." : "No impact – detection system malfunction."}`]);
+      }
+      if (view.outgoing) {
+        entries.push([view.outgoing.launched, `Your country launched at ${names[1 - me]}.`]);
+        if (now >= view.outgoing.impact) entries.push([view.outgoing.impact, `Your missile hit ${names[1 - me]}.`]);
+      }
+      if (view.end_requested) entries.push([view.end_requested, "Your country requested the end."]);
+      entries.sort((a, b) => a[0] - b[0]);
+      $("log").replaceChildren(...entries.map(([t, text]) => el("li", {}, el("time", { textContent: timeOfDay(t) }), el("span", { textContent: text }))));
     }
 
-    const entries = [];
-    for (const w of view.warnings) {
-      const result = w.outcome === "impact" ? " Impact." : w.outcome === "dud" ? " No detonation. Nothing happened." : "";
-      entries.push([w.detected, `Early warning: incoming missile from ${view.enemy}.${result}`]);
-    }
-    if (view.launched) entries.push([view.launched, `You launched at ${view.enemy}.`]);
-    if (view.enemy_destroyed) entries.push([view.enemy_destroyed, `${view.enemy} was destroyed.`]);
-    entries.sort((a, b) => a[0] - b[0]);
-    $("log").replaceChildren(...entries.map(([at, text]) => el("li", {}, el("time", {}, timeOfDay(at)), el("span", {}, text))));
-    $("log").hidden = entries.length === 0 || !!view.debrief;
+    if (view.status === "over" && view.reveal) renderReveal($("countryReveal"), view.reveal, names, view.settings);
 
-    $("over").hidden = view.phase !== "over";
-    if (view.debrief) {
-      const survived = !view.destroyed && !view.enemy_destroyed;
-      $("overTitle").textContent = survived ? "Petrov Day is over. Nobody was destroyed." : "Petrov Day is over.";
-      $("debrief").replaceChildren(...view.debrief.map((d) => el("li", {}, el("time", {}, timeOfDay(d.t)), el("span", {}, d.text))));
+    const hitClosed = store(`petrov-hit-closed-${key}`, false);
+    $("hit").hidden = !view.destroyed || hitClosed;
+    $("hitConsequence").textContent = view.settings.consequences[me].trim() || "Carry out your consequence.";
+
+    sound.alarm(sounding.length > 0);
+    document.body.classList.toggle("alarm", sounding.length > 0);
+    if (sounding.length && navigator.vibrate && Date.now() - lastVibrate > 1500) {
+      navigator.vibrate([700, 300]);
+      lastVibrate = Date.now();
+    }
+    if (!$("lostBanner").hidden && Date.now() - lastBeep > 2000) {
+      sound.beep();
+      lastBeep = Date.now();
     }
   }
 
-  connect();
   setInterval(render, 200);
 }
 
-const match = location.pathname.match(/^\/h\/([A-Za-z0-9]+)\/?$/);
-if (match) housePage(match[1]); else createPage();
+const path = location.pathname.replace(/\/+$/, "");
+const route = path.match(/^\/(g|c|k)\/([A-Za-z0-9]+)$/);
+if (route && route[1] === "g") gamePage(route[2]);
+else if (route && route[1] === "c") claimPage(route[2]);
+else if (route && route[1] === "k") countryPage(route[2]);
+else if (path === "/check") checkPage();
+else homePage();
 </script>
 </body>
 </html>

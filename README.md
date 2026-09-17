@@ -1,6 +1,6 @@
 # petrov
 
-Multiplayer Petrov Day: two houses, one red button each, a retaliation window and false alarms.
+A Petrov Day ritual for two countries: one missile each, a warning window, and false alarms that look exactly like real launches.
 
 ## Run
 
@@ -8,7 +8,7 @@ Multiplayer Petrov Day: two houses, one red button each, a retaliation window an
 cargo run
 ```
 
-Listens on `127.0.0.1:8095` (`PETROV_ADDR`) and stores games in `games.json` (`PETROV_STATE`). Open `/`, create a game, and open each house's secret link on the device in that house.
+Listens on `127.0.0.1:8095` (`PETROV_ADDR`) and stores games in `games.json` (`PETROV_STATE`). Open `/`, create a game, send each host their claim link, and share the resulting country link with everyone in that country. The game goes live when both countries press Start and ends when a country requests the end and nothing is in flight.
 
 ## NixOS
 

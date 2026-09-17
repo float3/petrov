@@ -244,7 +244,7 @@ struct CreateGame {
     start: u64,
     end: u64,
     flight_secs: u64,
-    false_alarms: f64,
+    false_alarm_chance: f64,
     houses: [NewHouse; 2],
 }
 
@@ -365,9 +365,10 @@ async fn create_game(State(app): State<Shared>, Json(req): Json<CreateGame>) -> 
     if req.end <= now || req.start > now + 30 * DAY_MS {
         return bad_request("The ceremony must end in the future and start within 30 days.");
     }
-    if !(0.0..=10.0).contains(&req.false_alarms) {
-        return bad_request("Expected false alarms must be between 0 and 10.");
+    if !(0.0..=99.0).contains(&req.false_alarm_chance) {
+        return bad_request("The false alarm chance must be between 0 and 99 percent.");
     }
+    let false_alarm_rate = -(1.0 - req.false_alarm_chance / 100.0).ln();
     for h in &req.houses {
         let name = h.name.trim();
         if name.is_empty() || name.chars().count() > 60 || h.consequence.chars().count() > 500 {
@@ -382,7 +383,7 @@ async fn create_game(State(app): State<Shared>, Json(req): Json<CreateGame>) -> 
         let mut rng = rand::rng();
         (0..2)
             .flat_map(|h| {
-                schedule_false_alarms(&mut rng, h, req.start, req.end, flight, req.false_alarms)
+                schedule_false_alarms(&mut rng, h, req.start, req.end, flight, false_alarm_rate)
             })
             .collect()
     };
@@ -400,7 +401,7 @@ async fn create_game(State(app): State<Shared>, Json(req): Json<CreateGame>) -> 
         start: req.start,
         end: req.end,
         flight,
-        false_alarm_rate: req.false_alarms,
+        false_alarm_rate,
         houses: [make(a), make(b)],
         missiles: Vec::new(),
         false_alarms,
@@ -634,5 +635,33 @@ mod tests {
                 assert!(f.detected >= 1_000 && f.impact <= 3_601_000);
             }
         }
+    }
+
+    #[test]
+    fn false_alarms_are_private_until_the_debrief() {
+        let g = game(vec![FalseAlarm {
+            to: 0,
+            detected: 5_000,
+            impact: 15_000,
+        }]);
+        assert!(g.view(0, 10_000).warnings.len() == 1);
+        assert!(g.view(1, 10_000).warnings.is_empty());
+        assert!(g.view(1, 20_000).warnings.is_empty());
+        let debrief = g.view(1, 100_000).debrief.expect("over");
+        assert!(
+            debrief
+                .iter()
+                .any(|e| e.text.starts_with("False alarm at a"))
+        );
+    }
+
+    #[test]
+    fn chance_maps_to_probability_of_any_false_alarm() {
+        let mut rng = rand::rng();
+        let rate = -(1.0_f64 - 0.3).ln();
+        let hits = (0..20_000)
+            .filter(|_| !schedule_false_alarms(&mut rng, 0, 0, 3_600_000, 60_000, rate).is_empty())
+            .count();
+        assert!((5_600..6_400).contains(&hits), "{hits}");
     }
 }

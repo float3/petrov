@@ -1,6 +1,6 @@
 {
-  "name": "Petrov Day",
-  "short_name": "Petrov",
+  "name": "{{DAY}}",
+  "short_name": "{{SHORT}}",
   "display": "standalone",
   "background_color": "#0b0d0c",
   "theme_color": "#0b0d0c",

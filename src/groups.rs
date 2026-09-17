@@ -18,21 +18,21 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     era * 146_097 + day_of_era - 719_468
 }
 
-fn reset_of_year(year: i64) -> u64 {
-    ((days_from_civil(year, 9, 27) * 86_400 + 12 * 3600) * 1000) as u64
+fn reset_of_year(year: i64, month: i64, day: i64) -> u64 {
+    (((days_from_civil(year, month, day) + 1) * 86_400 + 12 * 3600) * 1000) as u64
 }
 
-/// The most recent moment 26 September ended everywhere on Earth: 27 September,
-/// 00:00 at UTC-12, which is 12:00 UTC. Listings from before it are cleared.
-pub fn last_reset(now: u64) -> u64 {
+/// The most recent moment the given day ended everywhere on Earth: midnight
+/// at UTC-12, which is 12:00 UTC the next day. Listings from before it are cleared.
+pub fn last_reset(now: u64, month: i64, day: i64) -> u64 {
     let mut year = 1970 + (now / 31_556_952_000) as i64;
-    while reset_of_year(year) > now {
+    while reset_of_year(year, month, day) > now {
         year -= 1;
     }
-    while reset_of_year(year + 1) <= now {
+    while reset_of_year(year + 1, month, day) <= now {
         year += 1;
     }
-    reset_of_year(year)
+    reset_of_year(year, month, day)
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -168,10 +168,11 @@ mod tests {
     fn listings_reset_once_26_september_is_over_everywhere() {
         let reset_2025 = 1_758_974_400_000;
         let reset_2026 = 1_790_510_400_000;
-        assert_eq!(last_reset(1_789_603_200_000), reset_2025);
-        assert_eq!(last_reset(reset_2026 - 1), reset_2025);
-        assert_eq!(last_reset(reset_2026), reset_2026);
-        assert_eq!(last_reset(1_709_164_800_000), 1_695_816_000_000);
+        assert_eq!(last_reset(1_789_603_200_000, 9, 26), reset_2025);
+        assert_eq!(last_reset(reset_2026 - 1, 9, 26), reset_2025);
+        assert_eq!(last_reset(reset_2026, 9, 26), reset_2026);
+        assert_eq!(last_reset(1_709_164_800_000, 9, 26), 1_695_816_000_000);
+        assert_eq!(last_reset(1_789_603_200_000, 10, 27), 1_761_652_800_000);
     }
 
     #[test]

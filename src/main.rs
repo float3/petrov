@@ -1,3 +1,4 @@
+mod brand;
 mod game;
 mod groups;
 
@@ -12,6 +13,7 @@ use axum::{
     },
     routing::{get, post, put},
 };
+use brand::Brand;
 use game::{Game, Settings};
 use groups::{Group, GroupInput};
 use qrcode::{QrCode, render::svg};
@@ -36,6 +38,9 @@ const DAY_MS: u64 = 24 * HOUR_MS;
 const MAX_GAMES: usize = 2000;
 
 struct App {
+    brand: &'static Brand,
+    index: &'static str,
+    manifest: &'static str,
     games: Mutex<HashMap<String, Game>>,
     state_path: PathBuf,
     groups: Mutex<Vec<Group>>,
@@ -344,7 +349,7 @@ async fn time() -> Response {
 
 async fn list_groups(State(app): State<Shared>) -> Response {
     let groups = app.groups.lock().await;
-    let reset = groups::last_reset(now_ms());
+    let reset = groups::last_reset(now_ms(), app.brand.month, app.brand.day_of_month);
     let mut public: Vec<_> = groups
         .iter()
         .filter(|g| g.created >= reset)
@@ -436,8 +441,16 @@ async fn delete_group(
     StatusCode::NO_CONTENT.into_response()
 }
 
-async fn index() -> Html<&'static str> {
-    Html(INDEX)
+async fn index(State(app): State<Shared>) -> Html<&'static str> {
+    Html(app.index)
+}
+
+async fn manifest(State(app): State<Shared>) -> Response {
+    (
+        [(header::CONTENT_TYPE, "application/manifest+json")],
+        app.manifest,
+    )
+        .into_response()
 }
 
 async fn cleanup(app: Shared) {
@@ -453,7 +466,7 @@ async fn cleanup(app: Shared) {
         drop(games);
         let mut groups = app.groups.lock().await;
         let before = groups.len();
-        let reset = groups::last_reset(now);
+        let reset = groups::last_reset(now, app.brand.month, app.brand.day_of_month);
         groups.retain(|g| g.created >= reset);
         if groups.len() != before {
             write_json(&app.groups_path, &*groups);
@@ -473,7 +486,14 @@ async fn main() {
     let games: HashMap<String, Game> = read_json(&state_path);
     let groups: Vec<Group> = read_json(&groups_path);
 
+    let brand_name = std::env::var("PETROV_BRAND").unwrap_or_else(|_| "petrov".into());
+    let brand =
+        Brand::find(&brand_name).unwrap_or_else(|| panic!("unknown PETROV_BRAND {brand_name}"));
+
     let app = Arc::new(App {
+        brand,
+        index: Box::leak(brand.render(INDEX).into_boxed_str()),
+        manifest: Box::leak(brand.render(MANIFEST).into_boxed_str()),
         games: Mutex::new(games),
         state_path,
         groups: Mutex::new(groups),
@@ -488,15 +508,7 @@ async fn main() {
         .route("/info", get(index))
         .route("/g/{key}", get(index))
         .route("/k/{key}", get(index))
-        .route(
-            "/manifest.webmanifest",
-            get(|| async {
-                (
-                    [(header::CONTENT_TYPE, "application/manifest+json")],
-                    MANIFEST,
-                )
-            }),
-        )
+        .route("/manifest.webmanifest", get(manifest))
         .route(
             "/icon.svg",
             get(|| async { ([(header::CONTENT_TYPE, "image/svg+xml")], ICON) }),

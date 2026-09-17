@@ -38,51 +38,64 @@
       ...
     }: let
       cfg = config.services.petrov;
+      site = lib.types.submodule {
+        options = {
+          brand = lib.mkOption {
+            type = lib.types.enum ["petrov" "arkhipov"];
+            default = "petrov";
+          };
+          port = lib.mkOption {
+            type = lib.types.port;
+          };
+          domains = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            description = "Serve through nginx with ACME on each of these domains.";
+          };
+        };
+      };
     in {
       options.services.petrov = {
-        enable = lib.mkEnableOption "the multiplayer Petrov Day server";
         package = lib.mkOption {
           type = lib.types.package;
           default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
-        port = lib.mkOption {
-          type = lib.types.port;
-          default = 8095;
-        };
-        domain = lib.mkOption {
-          type = lib.types.nullOr lib.types.str;
-          default = null;
-          description = "Serve through nginx with ACME on this domain.";
+        sites = lib.mkOption {
+          type = lib.types.attrsOf site;
+          default = {};
+          description = "Each site is its own service with its state in /var/lib/<name>.";
         };
       };
 
-      config = lib.mkIf cfg.enable (lib.mkMerge [
-        {
-          systemd.services.petrov = {
-            description = "Multiplayer Petrov Day";
+      config = {
+        systemd.services =
+          lib.mapAttrs (name: site: {
+            description = "${site.brand} ritual server (${name})";
             wantedBy = ["multi-user.target"];
             after = ["network.target"];
             environment = {
-              PETROV_ADDR = "127.0.0.1:${toString cfg.port}";
-              PETROV_STATE = "/var/lib/petrov/games.json";
+              PETROV_ADDR = "127.0.0.1:${toString site.port}";
+              PETROV_BRAND = site.brand;
+              PETROV_STATE = "/var/lib/${name}/games.json";
             };
             serviceConfig = {
               ExecStart = lib.getExe cfg.package;
               DynamicUser = true;
-              StateDirectory = "petrov";
+              StateDirectory = name;
               Restart = "always";
               RestartSec = 1;
             };
-          };
-        }
-        (lib.mkIf (cfg.domain != null) {
-          services.nginx.virtualHosts.${cfg.domain} = {
+          })
+          cfg.sites;
+
+        services.nginx.virtualHosts = lib.mkMerge (lib.mapAttrsToList (name: site:
+          lib.genAttrs site.domains (domain: {
             forceSSL = true;
             enableACME = true;
-            locations."/".proxyPass = "http://127.0.0.1:${toString cfg.port}";
-          };
-        })
-      ]);
+            locations."/".proxyPass = "http://127.0.0.1:${toString site.port}";
+          }))
+        cfg.sites);
+      };
     };
   };
 }

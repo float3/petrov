@@ -27,3 +27,27 @@ jobs:
 
       - name: Build the package
         run: nix build --print-build-logs
+
+      - name: Evaluate the NixOS module with two sites
+        run: |
+          nix eval --impure --raw --expr '
+            let
+              flake = builtins.getFlake "git+file://'"$PWD"'";
+              system = flake.inputs.nixpkgs.lib.nixosSystem {
+                system = "x86_64-linux";
+                modules = [
+                  flake.nixosModules.default
+                  {
+                    boot.isContainer = true;
+                    system.stateVersion = "26.05";
+                    services.nginx.enable = true;
+                    security.acme.acceptTerms = true;
+                    security.acme.defaults.email = "ci@example.com";
+                    services.petrov.sites = {
+                      petrov = { port = 8095; domains = ["petrov.example.com"]; };
+                      arkhipov = { brand = "arkhipov"; port = 8096; domains = ["arkhipov.example.com"]; };
+                    };
+                  }
+                ];
+              };
+            in system.config.system.build.toplevel.drvPath'

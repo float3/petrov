@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Test
+        run: nix develop --command cargo test
+
+      - name: Lint
+        run: nix develop --command cargo clippy --all-targets -- -D warnings
+
+      - name: Build the package
+        run: nix build --print-build-logs

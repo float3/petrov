@@ -89,7 +89,6 @@ header.stations h1, header.stations h2 { font-size: 20px; overflow-wrap: anywher
   border: 2px solid var(--red); border-radius: 10px; padding: 16px; margin: 16px 0; text-align: center;
   background: #2a0608; animation: pulse 1s steps(2, jump-none) infinite;
 }
-.alert.acked { animation: none; }
 .alert h2 { color: var(--red); font-size: clamp(22px, 6vw, 32px); }
 .alert .big { font-size: clamp(56px, 18vw, 110px); font-variant-numeric: tabular-nums; line-height: 1; margin: 8px 0; color: #fff; }
 .alert.done { animation: none; background: var(--panel); border-color: var(--line); }
@@ -690,7 +689,6 @@ function countryPage(key) {
   $("country").hidden = false;
   let view = null, armed = false, disarmTimer = null, holding = null, notice = null, confirmingEnd = false;
   let hiddenSince = null;
-  const acked = new Set(store(`petrov-acked-${key}`, []));
   const seen = { first: true, warnings: new Set(), destroyed: null, impact: false };
   const warningCards = new Map();
 
@@ -798,25 +796,17 @@ function countryPage(key) {
       const label = el("div");
       const title = el("h2");
       const detail = el("p", { className: "muted" });
-      const ack = el("button", { textContent: "Acknowledge (silence this device)" });
-      ack.onclick = () => {
-        acked.add(w.id);
-        persist(`petrov-acked-${key}`, [...acked]);
-        render();
-      };
-      card = { node: el("div", { className: "alert" }, title, count, label, detail, el("div", { className: "actions", style: "justify-content:center" }, ack)), count, label, title, detail, ack };
+      card = { node: el("div", { className: "alert" }, title, count, label, detail), count, label, title, detail };
       warningCards.set(w.id, card);
     }
     const now = sub.now();
     const done = !!w.result;
     card.node.classList.toggle("done", done);
-    card.node.classList.toggle("acked", acked.has(w.id));
     card.title.textContent = done ? (w.result === "impact" ? "IMPACT" : "No impact – detection system malfunction") : "INCOMING MISSILE";
     card.count.textContent = done ? "" : countdown(w.ends - now);
     card.count.hidden = done;
     card.label.textContent = done ? "" : `until impact · detected ${timeOfDay(w.detected)}`;
     card.detail.textContent = done ? `Warning detected ${timeOfDay(w.detected)}.` : "";
-    card.ack.hidden = done || acked.has(w.id);
     return card.node;
   }
 
@@ -852,7 +842,7 @@ function countryPage(key) {
     }
 
     const active = view.status === "live" ? view.warnings.filter((w) => !w.result) : [];
-    const sounding = active.filter((w) => !acked.has(w.id) && !view.destroyed);
+    const sounding = view.destroyed ? [] : active;
 
     if (view.status === "live") {
       const visible = view.warnings.filter((w) => !w.result || now < w.ends + 60_000);

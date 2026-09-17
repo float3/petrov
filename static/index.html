@@ -137,6 +137,20 @@ details > div { padding: 0 16px 16px; }
 .check .buttons { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .check button { padding: 8px 12px; }
 
+h2 { font-size: 19px; margin: 32px 0 8px; }
+.main-posts li { margin: 12px 0; }
+ul.posts, ul.ways { padding-left: 20px; margin: 4px 0; }
+ul.posts li, ul.ways li { margin: 6px 0; }
+.home-links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 8px 0 16px; }
+.group { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin: 16px 0; }
+.group h3 { font-size: 18px; margin: 0 0 4px; overflow-wrap: anywhere; }
+.group .meta { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+.group .description { white-space: pre-wrap; overflow-wrap: anywhere; }
+.group .contact { overflow-wrap: anywhere; }
+.group .manage { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.group .manage button { padding: 6px 10px; font-size: 14px; }
+.group .manage input { width: auto; flex: 1 1 160px; padding: 6px 10px; }
+
 @media (max-width: 520px) {
   .row { grid-template-columns: 1fr; gap: 0; }
   .check { grid-template-columns: 1fr; }
@@ -160,7 +174,127 @@ details > div { padding: 0 16px 16px; }
       <button id="createGame" class="primary big">Create a game</button>
       <a href="/check">Pre-flight check for this device</a>
     </div>
+    <div class="home-links">
+      <a href="/groups">Find another group</a>
+      <a href="/info">About Petrov Day parties</a>
+    </div>
     <p id="createError" class="error"></p>
+  </section>
+
+  <section id="info" hidden>
+    <p><a href="/">← Petrov Day</a></p>
+    <div class="title"><h1>Petrov Day parties</h1></div>
+    <p>On 26 September 1983, the Soviet early warning system reported American missiles on their way. Stanislav Petrov, the officer on duty, reported a system malfunction instead of an attack. He was right, and there was no retaliation. Since 2007, rationalist and effective altruist communities have marked 26 September as Petrov Day: a day to remember how close we came, and to practice not destroying the world.</p>
+
+    <h2>Ways to celebrate</h2>
+    <ul class="ways">
+      <li><strong>A quiet ceremony.</strong> Gather, light candles, read the history of nuclear close calls aloud and put the candles out one by one. The <a href="https://www.lesswrong.com/posts/fr8MEigHzJeFQkctL/petrov-day-is-september-26">original ritual</a> gives you a script.</li>
+      <li><strong>A red button.</strong> Put a button in the room. If anyone presses it, the evening ends at once and everyone leaves in silence. <a href="https://www.lesswrong.com/posts/XJxwFMSL5TPN2usC6/modes-of-petrov-day">Modes of Petrov Day</a> describes this and harder versions.</li>
+      <li><strong>Two groups.</strong> Two houses hold the ritual at the same time, each able to launch at the other. <a href="/">Create a game</a> with this app, or <a href="/groups">find another group</a> to pair up with.</li>
+      <li><strong>Food.</strong> Some groups cook a Soviet or Russian meal; see <a href="https://www.lesswrong.com/posts/oDKzhwdRaqXpyJBLR/russian-food-for-petrov-day">Russian Food for Petrov Day</a>.</li>
+    </ul>
+
+    <h2>Planning a two-group evening</h2>
+    <ul class="ways">
+      <li>Agree with the other group on a date, a start time in both time zones, and what happens to each house if it is hit, such as ending the evening or destroying a cake.</li>
+      <li>Each group has a host who claims their country in the game and shares the country link with everyone present.</li>
+      <li>Keep one device per house open, plugged in and unlocked for the whole ritual, and run the <a href="/check">pre-flight check</a> on it beforehand.</li>
+      <li>Plan about an hour for the ritual itself, and time to talk afterwards.</li>
+    </ul>
+
+    <h2>Start here</h2>
+    <ul class="posts main-posts">
+          <li><a href="https://www.lesswrong.com/posts/fr8MEigHzJeFQkctL/petrov-day-is-september-26">Petrov Day is September 26</a> <span class="muted">· jimrandomh, 2014</span><br><span class="muted">The original Petrov Day ritual: readings, candles and symbolic actions for a small group.</span></li>
+          <li><a href="https://www.lesswrong.com/posts/XJxwFMSL5TPN2usC6/modes-of-petrov-day">Modes of Petrov Day</a> <span class="muted">· Raemon, 2019</span><br><span class="muted">Easy, normal, hardcore and multiplayer ways to hold Petrov Day.</span></li>
+    </ul>
+
+    <h2>Misc</h2>
+    <p class="muted">Everything else tagged <a href="https://www.lesswrong.com/w/petrov-day">Petrov Day</a> on LessWrong, newest first.</p>
+    <ul class="posts">
+          <li><a href="https://www.lesswrong.com/posts/YDPQGKqWMM8wz2dGA/a-new-version-of-the-petrov-day-booklet">A new version of the Petrov Day booklet</a> <span class="muted">· laniakea, 2026</span></li>
+          <li><a href="https://www.lesswrong.com/posts/yCiks3cbRqvi2SwEk/2025-petrov-day-speech">2025 Petrov day speech</a> <span class="muted">· nik lacombe, 2025</span></li>
+          <li><a href="https://www.lesswrong.com/posts/NsxFcB2EAxcY6cdGh/2024-petrov-day-retrospective">2024 Petrov Day Retrospective</a> <span class="muted">· Ben Pace, 2024</span></li>
+          <li><a href="https://www.lesswrong.com/posts/kj4jW9DxtKQBJbapn/stanislav-petrov-quarterly-performance-review">Stanislav Petrov Quarterly Performance Review</a> <span class="muted">· Ricki Heicklen, 2024</span></li>
+          <li><a href="https://www.lesswrong.com/posts/6LJ6xcHEjKF9zWKzs/completed-the-2024-petrov-day-scenario">[Completed] The 2024 Petrov Day Scenario</a> <span class="muted">· Ben Pace, 2024</span></li>
+          <li><a href="https://www.lesswrong.com/posts/c7uQLGrCBLjkbZhPq/petrov-day-retrospective-2023-re-the-most-important-virtue">Petrov Day Retrospective, 2023 (re: the most important virtue of Petrov Day &amp; unilaterally promoting it)</a> <span class="muted">· Ruby, 2023</span></li>
+          <li><a href="https://www.lesswrong.com/posts/kqn6g79q35hXestoa/petrov-day-spoiler-warning">Petrov Day [Spoiler Warning]</a> <span class="muted">· lsusr, 2023</span></li>
+          <li><a href="https://www.lesswrong.com/posts/8FfnoqwgkygT8nnzj/linkpost-video-all-the-times-we-nearly-blew-up-the-world">[Linkpost/Video] All The Times We Nearly Blew Up The World</a> <span class="muted">· Jacob G-W, 2023</span></li>
+          <li><a href="https://www.lesswrong.com/posts/RnxKEgds4q8T8LeZp/austin-petrov-day-revision-2023">Austin Petrov Day revision, 2023</a> <span class="muted">· Austin LW ritual working group, 2023</span></li>
+          <li><a href="https://www.lesswrong.com/posts/gLpYbWzqL2jArMepD/a-list-of-petrov-buttons">A list of Petrov buttons</a> <span class="muted">· philh, 2022</span></li>
+          <li><a href="https://www.lesswrong.com/posts/ytuLbHbdQweAwGk9L/petrov-day-retrospective-2022">Petrov Day Retrospective: 2022</a> <span class="muted">· Ruby, 2022</span></li>
+          <li><a href="https://www.lesswrong.com/posts/KTEciTeFwL2tTujZk/lw-petrov-day-2022-monday-9-26">LW Petrov Day 2022 (Monday, 9/26)</a> <span class="muted">· Ruby, 2022</span></li>
+          <li><a href="https://www.lesswrong.com/posts/oDKzhwdRaqXpyJBLR/russian-food-for-petrov-day">Russian Food for Petrov Day</a> <span class="muted">· weft, 2022</span></li>
+          <li><a href="https://www.lesswrong.com/posts/jcPiBoHnyFC4gqiQ6/an-idea-for-a-more-communal-petrov-day-in-2022">An Idea for a More Communal Petrov Day in 2022</a> <span class="muted">· Ben Pace, 2021</span></li>
+          <li><a href="https://www.lesswrong.com/posts/wgreyTFhrNmgJBjMD/petrov-day-retrospective-2021">Petrov Day Retrospective: 2021</a> <span class="muted">· Ruby, 2021</span></li>
+          <li><a href="https://www.lesswrong.com/posts/gjZMG8WAnh3ah7Mzz/ea-hangout-prisoners-dilemma">EA Hangout Prisoners&#x27; Dilemma</a> <span class="muted">· Jeffrey Ladish, 2021</span></li>
+          <li><a href="https://www.lesswrong.com/posts/EW8yZYcu3Kff2qShS/petrov-day-2021-mutually-assured-destruction">Petrov Day 2021: Mutually Assured Destruction?</a> <span class="muted">· Ruby, 2021</span></li>
+          <li><a href="https://www.lesswrong.com/posts/BK3LNmHiRzkPfpWpR/chaotic-era-avoid-or-survive">Chaotic era: avoid or survive?</a> <span class="muted">· Valentin2026, 2021</span></li>
+          <li><a href="https://www.lesswrong.com/posts/KQnYogkFTKc9wpWjY/postmortem-to-petrov-day-2020">Postmortem to Petrov Day, 2020</a> <span class="muted">· Ben Pace, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/K7jrkyKArvxJ224GD/on-destroying-the-world">On Destroying the World</a> <span class="muted">· Chris_Leong, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/tdLzqMueEp8zkqxfF/on-not-screwing-up-ritual-candles">On &quot;Not Screwing Up Ritual Candles&quot;</a> <span class="muted">· Raemon, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/evDZoYG4p6ZkQQkDw/surviving-petrov-day">Surviving Petrov Day</a> <span class="muted">· Mati_Roy, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/rZJvrf2DzsXcqnp6t/petrov-day-is-not-about-unilateral-action">Petrov Day is not about unilateral action</a> <span class="muted">· sen, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/XfHXQPPKNY8BXkn72/honoring-petrov-day-on-lesswrong-in-2020">Honoring Petrov Day on LessWrong, in 2020</a> <span class="muted">· Ben Pace, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/JtG3y8GBC2dTot339/petrov-event-roundup-2020">Petrov Event Roundup 2020</a> <span class="muted">· Raemon, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/7TMap3isj36wY9Rdz/austin-petrov-day-6-30pm-9-26">Austin Petrov Day: 6:30pm 9/26</a> <span class="muted">· jchan, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/jPSJTh5ctffyzFNB8/socially-distanced-outdoor-petrov-day-ceremonial-manual">Socially-distanced outdoor Petrov Day ceremonial manual</a> <span class="muted">· jchan, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/bh76S7YhiHYufjpk9/petrov-day-2020-virtual-celebration">Petrov Day 2020 Virtual Celebration</a> <span class="muted">· jasmine.ren, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/NzqhjL9nd8FSYA5QN/god-rewards-fools">&quot;God Rewards Fools&quot;</a> <span class="muted">· Czynski, 2020</span></li>
+          <li><a href="https://www.lesswrong.com/posts/guGdu2wKvbX4hAJwE/new-petrov-game-brainstorm">New Petrov Game Brainstorm</a> <span class="muted">· Alexei, 2019</span></li>
+          <li><a href="https://www.lesswrong.com/posts/krgNxiooRfnP9L4ZD/follow-up-to-petrov-day-2019">Follow-Up to Petrov Day, 2019</a> <span class="muted">· Ben Pace, 2019</span></li>
+          <li><a href="https://www.lesswrong.com/posts/DpiKi38Jq5z2aHvmo/happy-petrov-day-1">Happy Petrov Day!</a> <span class="muted">· Martin Sustrik, 2019</span></li>
+          <li><a href="https://www.lesswrong.com/posts/vvzfFcbmKgEsDBRHh/honoring-petrov-day-on-lesswrong-in-2019">Honoring Petrov Day on LessWrong, in 2019</a> <span class="muted">· Ben Pace, 2019</span></li>
+          <li><a href="https://www.lesswrong.com/posts/4g29JgtbJ283iJ3Bh/petrov-corrigibility">Petrov corrigibility</a> <span class="muted">· Stuart_Armstrong, 2018</span></li>
+          <li><a href="https://www.lesswrong.com/posts/CxjMErp5PHL9nFEbE/fli-awards-prize-to-arkhipov-s-relatives">FLI awards prize to Arkhipov’s relatives</a> <span class="muted">· ESRogs, 2017</span></li>
+          <li><a href="https://www.lesswrong.com/posts/muh5rkKPJnJN4RfAA/stanislav-petrov-has-died-2017-05-19">Stanislav Petrov has died (2017-05-19)</a> <span class="muted">· fortyeridania, 2017</span></li>
+          <li><a href="https://www.lesswrong.com/posts/PXcPuydmBnqexJK8s/a-child-s-petrov-day-speech">A Child&#x27;s Petrov Day Speech</a> <span class="muted">· James_Miller, 2016</span></li>
+          <li><a href="https://www.lesswrong.com/posts/T5AJNqQnws5SimoLa/happy-petrov-day-0">Happy Petrov Day</a> <span class="muted">· Eneasz, 2015</span></li>
+          <li><a href="https://www.lesswrong.com/posts/Aggy4bNssm6WL8Dsy/film-about-stanislav-petrov">Film about Stanislav Petrov</a> <span class="muted">· matheist, 2015</span></li>
+          <li><a href="https://www.lesswrong.com/posts/LZ4cQNrFzpB7sApCz/petrov-day-reminder">Petrov Day Reminder</a> <span class="muted">· Eneasz, 2014</span></li>
+          <li><a href="https://www.lesswrong.com/posts/nJynWFTH3rE469NdN/happy-petrov-day">Happy Petrov Day</a> <span class="muted">· Eneasz, 2013</span></li>
+          <li><a href="https://www.lesswrong.com/posts/FGTgeweYNxmMBx4fz/existential-risk">Existential Risk</a> <span class="muted">· lukeprog, 2011</span></li>
+          <li><a href="https://www.lesswrong.com/posts/BDf2aPaWSfH2gWWAc/vasili-arkhipov-day">Vasili Arkhipov Day</a> <span class="muted">· David Althaus, 2011</span></li>
+          <li><a href="https://www.lesswrong.com/posts/79g662fdusDsXWK67/stanislav-petrov-day">Stanislav Petrov Day</a> <span class="muted">· gwern, 2011</span></li>
+          <li><a href="https://www.lesswrong.com/posts/QtyKq4BDyuJ3tysoK/9-26-is-petrov-day">9/26 is Petrov Day</a> <span class="muted">· Eliezer Yudkowsky, 2007</span></li>
+    </ul>
+  </section>
+
+  <section id="groups" hidden>
+    <p><a href="/">← Petrov Day</a></p>
+    <div class="title"><h1>Find another group</h1></div>
+    <p class="muted">A two-group Petrov Day needs a second house. List your group, or contact one of the groups below and create a game together. Everything you enter here except the password is public.</p>
+    <div class="actions"><button id="groupNew" class="primary">List your group</button></div>
+
+    <form id="groupForm" class="panel" autocomplete="off" hidden>
+      <h3 id="groupFormTitle">List your group</h3>
+      <label for="groupName">Group name</label>
+      <input id="groupName" maxlength="80" required>
+      <label for="groupDescription">About your group</label>
+      <textarea id="groupDescription" maxlength="2000" required placeholder="Who you are, how many people, what kind of evening you have in mind"></textarea>
+      <div class="row">
+        <div>
+          <label for="groupWhen">Rough time</label>
+          <input id="groupWhen" maxlength="120" required placeholder="e.g. 26 September, around 19:30">
+        </div>
+        <div>
+          <label for="groupLocation">Location or time zone</label>
+          <input id="groupLocation" maxlength="120" required placeholder="e.g. Munich, CEST (UTC+2)">
+        </div>
+      </div>
+      <label for="groupContact">Email or other contact</label>
+      <input id="groupContact" maxlength="200" required placeholder="Shown publicly">
+      <label for="groupPassword">Password</label>
+      <input id="groupPassword" type="password" minlength="6" maxlength="200" required autocomplete="new-password">
+      <p class="hint" id="groupPasswordHint">You need this password to edit or delete your listing later. It cannot be recovered.</p>
+      <div class="actions">
+        <button id="groupSubmit" class="primary" type="submit">Publish</button>
+        <button id="groupCancel" type="button">Cancel</button>
+      </div>
+      <p id="groupError" class="error"></p>
+    </form>
+
+    <div id="groupList"></div>
+    <p id="groupEmpty" class="muted" hidden>No groups listed yet.</p>
   </section>
 
   <section id="checkPage" hidden>
@@ -544,6 +678,113 @@ function preflight(container, connectionCheck) {
     el("p", { className: "hint", textContent: "Keep at least one command center device per country open, on screen, unlocked and plugged in for the whole ritual. Phones may not sound alarms while locked or in the background." }),
     ...rows,
   );
+}
+
+function groupsPage() {
+  $("groups").hidden = false;
+  let groups = [], editing = null;
+  const fields = { name: "groupName", description: "groupDescription", when: "groupWhen", location: "groupLocation", contact: "groupContact" };
+
+  function contactNode(contact) {
+    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) return el("a", { href: `mailto:${contact}`, textContent: contact });
+    if (/^https:\/\/\S+$/.test(contact)) return el("a", { href: contact, textContent: contact, rel: "nofollow noopener", target: "_blank" });
+    return document.createTextNode(contact);
+  }
+
+  function openForm(group) {
+    editing = group;
+    $("groupForm").hidden = false;
+    $("groupNew").hidden = true;
+    $("groupFormTitle").textContent = group ? `Edit ${group.name}` : "List your group";
+    $("groupSubmit").textContent = group ? "Save changes" : "Publish";
+    $("groupPasswordHint").textContent = group ? "Enter the password you chose when you listed the group." : "You need this password to edit or delete your listing later. It cannot be recovered.";
+    $("groupPassword").autocomplete = group ? "current-password" : "new-password";
+    for (const [key, id] of Object.entries(fields)) $(id).value = group ? group[key] : "";
+    $("groupPassword").value = "";
+    $("groupError").textContent = "";
+    $("groupForm").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function closeForm() {
+    editing = null;
+    $("groupForm").hidden = true;
+    $("groupNew").hidden = false;
+  }
+
+  function render() {
+    $("groupEmpty").hidden = groups.length > 0;
+    $("groupList").replaceChildren(...groups.map((g) => {
+      const manage = el("div", { className: "manage" });
+      const resetManage = () => manage.replaceChildren(
+        el("button", { type: "button", textContent: "Edit", onclick: () => openForm(g) }),
+        el("button", { type: "button", textContent: "Delete", onclick: askDelete }),
+      );
+      function askDelete() {
+        const password = el("input", { type: "password", placeholder: "Password", autocomplete: "current-password" });
+        const error = el("span", { className: "error" });
+        const confirm = el("button", { type: "button", className: "danger", textContent: "Delete listing" });
+        confirm.onclick = async () => {
+          confirm.disabled = true;
+          try {
+            const res = await fetch(`/api/groups/${g.id}`, {
+              method: "DELETE",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ password: password.value }),
+            });
+            if (!res.ok) throw new Error(await res.text());
+            groups = groups.filter((x) => x.id !== g.id);
+            render();
+          } catch (e) {
+            error.textContent = e.message;
+            confirm.disabled = false;
+          }
+        };
+        manage.replaceChildren(password, confirm, el("button", { type: "button", textContent: "Cancel", onclick: resetManage }), error);
+        password.focus();
+      }
+      resetManage();
+      const listed = new Date(g.created).toLocaleDateString();
+      const updated = g.updated !== g.created ? `, updated ${new Date(g.updated).toLocaleDateString()}` : "";
+      return el("article", { className: "group" },
+        el("h3", { textContent: g.name }),
+        el("div", { className: "meta", textContent: `${g.when} · ${g.location}` }),
+        el("p", { className: "description", textContent: g.description }),
+        el("p", { className: "contact" }, "Contact: ", contactNode(g.contact)),
+        el("div", { className: "meta", textContent: `Listed ${listed}${updated}` }),
+        manage,
+      );
+    }));
+  }
+
+  async function load() {
+    try {
+      groups = await api("GET", "/api/groups");
+      render();
+    } catch (e) {
+      $("groupList").replaceChildren(el("p", { className: "error", textContent: `Could not load groups: ${e.message}` }));
+    }
+  }
+
+  $("groupNew").onclick = () => openForm(null);
+  $("groupCancel").onclick = closeForm;
+  $("groupForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const body = { password: $("groupPassword").value };
+    for (const [key, id] of Object.entries(fields)) body[key] = $(id).value;
+    $("groupSubmit").disabled = true;
+    $("groupError").textContent = "";
+    try {
+      const saved = await api(editing ? "PUT" : "POST", editing ? `/api/groups/${editing.id}` : "/api/groups", body);
+      groups = [saved, ...groups.filter((g) => g.id !== saved.id)];
+      closeForm();
+      render();
+    } catch (err) {
+      $("groupError").textContent = err.message;
+    }
+    $("groupSubmit").disabled = false;
+  });
+
+  load();
 }
 
 function homePage() {
@@ -935,6 +1176,8 @@ const route = path.match(/^\/(g|k)\/([A-Za-z0-9]+)$/);
 if (route && route[1] === "g") gamePage(route[2]);
 else if (route && route[1] === "k") countryPage(route[2]);
 else if (path === "/check") checkPage();
+else if (path === "/groups") groupsPage();
+else if (path === "/info") $("info").hidden = false;
 else homePage();
 </script>
 </body>

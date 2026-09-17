@@ -1,4 +1,5 @@
 mod game;
+mod groups;
 
 use axum::{
     Json, Router,
@@ -12,8 +13,9 @@ use axum::{
     routing::{get, post, put},
 };
 use game::{Game, Settings};
+use groups::{Group, GroupInput};
 use qrcode::{QrCode, render::svg};
-use serde::Serialize;
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{
     collections::HashMap,
     convert::Infallible,
@@ -36,6 +38,8 @@ const MAX_GAMES: usize = 2000;
 struct App {
     games: Mutex<HashMap<String, Game>>,
     state_path: PathBuf,
+    groups: Mutex<Vec<Group>>,
+    groups_path: PathBuf,
 }
 
 type Shared = Arc<App>;
@@ -68,16 +72,39 @@ fn json_response(body: String) -> Response {
     ([(header::CONTENT_TYPE, "application/json")], body).into_response()
 }
 
-fn save(app: &App, games: &HashMap<String, Game>) {
-    let json = match serde_json::to_vec(games) {
+fn write_json<T: Serialize>(path: &std::path::Path, value: &T) {
+    let json = match serde_json::to_vec(value) {
         Ok(json) => json,
-        Err(e) => return eprintln!("failed to serialize state: {e}"),
+        Err(e) => return eprintln!("failed to serialize {}: {e}", path.display()),
     };
-    let tmp = app.state_path.with_extension("tmp");
-    if let Err(e) = std::fs::write(&tmp, json).and_then(|()| std::fs::rename(&tmp, &app.state_path))
-    {
-        eprintln!("failed to write {}: {e}", app.state_path.display());
+    let tmp = path.with_extension("tmp");
+    if let Err(e) = std::fs::write(&tmp, json).and_then(|()| std::fs::rename(&tmp, path)) {
+        eprintln!("failed to write {}: {e}", path.display());
     }
+}
+
+fn read_json<T: DeserializeOwned + Default>(path: &std::path::Path) -> T {
+    match std::fs::read(path) {
+        Ok(bytes) => match serde_json::from_slice(&bytes) {
+            Ok(value) => value,
+            Err(e) => {
+                let backup = path.with_extension("unreadable.json");
+                eprintln!(
+                    "cannot parse {}: {e}; moving it to {}",
+                    path.display(),
+                    backup.display()
+                );
+                std::fs::rename(path, &backup).expect("cannot move unreadable state aside");
+                T::default()
+            }
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => T::default(),
+        Err(e) => panic!("cannot read {}: {e}", path.display()),
+    }
+}
+
+fn save(app: &App, games: &HashMap<String, Game>) {
+    write_json(&app.state_path, games);
 }
 
 fn find_country(games: &Games, key: &str) -> Option<(String, usize)> {
@@ -315,6 +342,95 @@ async fn time() -> Response {
     json_response(format!("{{\"now\":{}}}", now_ms()))
 }
 
+async fn list_groups(State(app): State<Shared>) -> Response {
+    let groups = app.groups.lock().await;
+    let mut public: Vec<_> = groups.iter().map(Group::public).collect();
+    public.sort_by_key(|g| std::cmp::Reverse(g.updated));
+    Json(public).into_response()
+}
+
+async fn create_group(State(app): State<Shared>, Json(input): Json<GroupInput>) -> Response {
+    if let Err(msg) = input.validate() {
+        return error(StatusCode::BAD_REQUEST, &msg);
+    }
+    let password = input.password.clone();
+    let hash = tokio::task::spawn_blocking(move || groups::hash_password(&password))
+        .await
+        .expect("hashing task");
+    let mut groups = app.groups.lock().await;
+    if groups.len() >= groups::MAX_GROUPS {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "The list is full.");
+    }
+    let group = Group::new(&input, hash, now_ms(), &mut rand::rng());
+    let public = group.public();
+    groups.push(group);
+    write_json(&app.groups_path, &*groups);
+    Json(public).into_response()
+}
+
+async fn authorize(
+    app: &App,
+    id: &str,
+    password: String,
+) -> Result<(), (StatusCode, &'static str)> {
+    let hash = app
+        .groups
+        .lock()
+        .await
+        .iter()
+        .find(|g| g.id == id)
+        .map(|g| g.password_hash.clone())
+        .ok_or((StatusCode::NOT_FOUND, "This group no longer exists."))?;
+    let ok = tokio::task::spawn_blocking(move || groups::verify_password(&password, &hash))
+        .await
+        .expect("verification task");
+    if ok {
+        Ok(())
+    } else {
+        Err((StatusCode::FORBIDDEN, "Wrong password."))
+    }
+}
+
+async fn update_group(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(input): Json<GroupInput>,
+) -> Response {
+    if let Err(msg) = input.validate() {
+        return error(StatusCode::BAD_REQUEST, &msg);
+    }
+    if let Err((status, msg)) = authorize(&app, &id, input.password.clone()).await {
+        return error(status, msg);
+    }
+    let mut groups = app.groups.lock().await;
+    let Some(group) = groups.iter_mut().find(|g| g.id == id) else {
+        return error(StatusCode::NOT_FOUND, "This group no longer exists.");
+    };
+    group.update(&input, now_ms());
+    let public = group.public();
+    write_json(&app.groups_path, &*groups);
+    Json(public).into_response()
+}
+
+#[derive(Deserialize)]
+struct PasswordOnly {
+    password: String,
+}
+
+async fn delete_group(
+    State(app): State<Shared>,
+    Path(id): Path<String>,
+    Json(body): Json<PasswordOnly>,
+) -> Response {
+    if let Err((status, msg)) = authorize(&app, &id, body.password).await {
+        return error(status, msg);
+    }
+    let mut groups = app.groups.lock().await;
+    groups.retain(|g| g.id != id);
+    write_json(&app.groups_path, &*groups);
+    StatusCode::NO_CONTENT.into_response()
+}
+
 async fn index() -> Html<&'static str> {
     Html(INDEX)
 }
@@ -330,6 +446,13 @@ async fn cleanup(app: Shared) {
         });
         save(&app, &games);
         drop(games);
+        let mut groups = app.groups.lock().await;
+        let before = groups.len();
+        groups.retain(|g| g.updated + 400 * DAY_MS > now);
+        if groups.len() != before {
+            write_json(&app.groups_path, &*groups);
+        }
+        drop(groups);
         tokio::time::sleep(Duration::from_secs(5 * 60)).await;
     }
 }
@@ -340,33 +463,23 @@ async fn main() {
     let state_path =
         PathBuf::from(std::env::var("PETROV_STATE").unwrap_or_else(|_| "games.json".into()));
 
-    let games: HashMap<String, Game> = match std::fs::read(&state_path) {
-        Ok(bytes) => match serde_json::from_slice(&bytes) {
-            Ok(games) => games,
-            Err(e) => {
-                let backup = state_path.with_extension("unreadable.json");
-                eprintln!(
-                    "cannot parse {}: {e}; moving it to {}",
-                    state_path.display(),
-                    backup.display()
-                );
-                std::fs::rename(&state_path, &backup).expect("cannot move unreadable state aside");
-                HashMap::new()
-            }
-        },
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => HashMap::new(),
-        Err(e) => panic!("cannot read {}: {e}", state_path.display()),
-    };
+    let groups_path = state_path.with_file_name("groups.json");
+    let games: HashMap<String, Game> = read_json(&state_path);
+    let groups: Vec<Group> = read_json(&groups_path);
 
     let app = Arc::new(App {
         games: Mutex::new(games),
         state_path,
+        groups: Mutex::new(groups),
+        groups_path,
     });
     tokio::spawn(cleanup(app.clone()));
 
     let router = Router::new()
         .route("/", get(index))
         .route("/check", get(index))
+        .route("/groups", get(index))
+        .route("/info", get(index))
         .route("/g/{key}", get(index))
         .route("/k/{key}", get(index))
         .route(
@@ -383,6 +496,8 @@ async fn main() {
             get(|| async { ([(header::CONTENT_TYPE, "image/svg+xml")], ICON) }),
         )
         .route("/api/time", get(time))
+        .route("/api/groups", get(list_groups).post(create_group))
+        .route("/api/groups/{id}", put(update_group).delete(delete_group))
         .route("/api/qr", post(qr))
         .route("/api/games", post(create_game))
         .route("/api/g/{key}", get(game_state))

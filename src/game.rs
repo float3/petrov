@@ -6,6 +6,9 @@ pub const MAX_CONSEQUENCE: usize = 20_000;
 const MAX_PERCENT_PER_MINUTE: f64 = 10_000.0;
 const MAX_FLIGHT_SECS: u64 = 365 * 24 * 60 * 60;
 pub const KEY_LEN: usize = 24;
+/// Far more false alarms than any ritual can use, but it keeps `advance` from
+/// scanning a list that grows without bound at high rates over a long game.
+pub const MAX_FALSE_ALARMS: usize = 2000;
 
 pub fn random_key(rng: &mut impl Rng, len: usize) -> String {
     (0..len).map(|_| rng.sample(Alphanumeric) as char).collect()
@@ -311,7 +314,10 @@ impl Game {
                     continue;
                 }
                 changed = true;
-                if self.end_requested_by_anyone(t) || self.destroyed_at(country, t).is_some() {
+                if self.end_requested_by_anyone(t)
+                    || self.destroyed_at(country, t).is_some()
+                    || self.false_alarms.len() >= MAX_FALSE_ALARMS
+                {
                     self.next_false_alarm[country] = None;
                     continue;
                 }
@@ -737,6 +743,14 @@ mod tests {
         g.advance(hours + 10 * FLIGHT, &mut rng);
         assert_eq!(g.false_alarms.len(), count);
         assert_eq!(g.status(), Status::Over);
+    }
+
+    #[test]
+    fn false_alarms_stop_at_the_cap() {
+        let (mut g, mut rng) = live_game([10.0, 10.0]);
+        g.advance(1000 * 3_600_000, &mut rng);
+        assert_eq!(g.false_alarms.len(), MAX_FALSE_ALARMS);
+        assert_eq!(g.next_false_alarm, [None, None]);
     }
 
     #[test]

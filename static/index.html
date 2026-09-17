@@ -151,6 +151,10 @@ ul.posts li { margin: 6px 0; }
 .group .manage button { padding: 6px 10px; font-size: 14px; }
 .group .manage input { width: auto; flex: 1 1 160px; padding: 6px 10px; }
 
+footer.source { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; }
+footer.source a { color: var(--muted); }
+footer.source a:hover { color: var(--green); }
+
 @media (max-width: 520px) {
   .row { grid-template-columns: 1fr; gap: 0; }
   .check { grid-template-columns: 1fr; }
@@ -345,6 +349,9 @@ ul.posts li { margin: 6px 0; }
       <button id="hitClose">Show the rest</button>
     </div>
   </section>
+  <footer class="source">
+    <a href="https://github.com/float3/petrov">Source on GitHub</a>
+  </footer>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);

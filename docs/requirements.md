@@ -19,9 +19,9 @@ outcome.
   - Missile flight time, which is also the warning window (default 5 min).
   - Each country's consequence: free text describing what that country does when it is hit
     (e.g. "We destroy our cake").
-- The game page offers one claim link per country, and each claim link works only once. The
-  claimer (the country's host) gets a country link to share with their citizens (a QR code is
-  nice to have). Anyone holding the country link is that country, on any number of devices,
+- The game page offers one claim button per country, and each country can be claimed only
+  once. Claiming takes the claimer (the country's host) to a country link to share with their
+  citizens (a QR code is nice to have). Anyone holding the country link is that country, on any number of devices,
   and all of them show the same live state. The host has no special powers: any device can
   press Start, launch or request the end.
 - Both consequences are visible to both countries.
@@ -92,6 +92,18 @@ outcome.
   against a false alarm and destroyed B".
 - The reveal stays read-only via the game and country links. Games are deleted ~30 days after
   they end.
+
+## Around the ritual
+
+- **Group board** (`/groups`): a public list where a group can offer itself as the second
+  country — name, description, rough time, location or time zone, contact. Anyone can list a
+  group, and a password chosen when listing is the only thing needed to edit or delete it
+  later. Still no accounts. The board is cleared every year once the day is over everywhere
+  on Earth (midnight at UTC-12).
+- **Info page** (`/info`): links to what other people do on the day, led by the LessWrong
+  ceremony.
+- **Brands:** one deployment serves Petrov Day (26 September), another Arkhipov Day
+  (27 October), from the same app. A branded page never mentions the other day.
 
 ## Edge cases
 - **Intentionally low false-alarm rate:** at the default rate, a warning is usually real, so

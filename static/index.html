@@ -868,7 +868,7 @@ function countryPage(key) {
   let view = null, armed = false, disarmTimer = null, holding = null, notice = null, confirmingEnd = false;
   let hiddenSince = null;
   const acked = new Set(store(`acked-${key}`, []));
-  const seen = { first: true, warnings: new Set(), destroyed: null, impact: false };
+  const seen = { first: true, destroyed: null };
   const warningCards = new Map();
 
   const url = `${location.origin}/k/${key}`;
@@ -902,18 +902,13 @@ function countryPage(key) {
   });
 
   function react() {
-    const fresh = view.warnings.filter((w) => !seen.warnings.has(w.id));
-    fresh.forEach((w) => seen.warnings.add(w.id));
-    const impact = !!(view.outgoing && sub.now() >= view.outgoing.impact);
     if (seen.first) {
       seen.first = false;
       seen.destroyed = view.destroyed;
-      seen.impact = impact;
       return;
     }
     if (view.destroyed && !seen.destroyed) sound.boom();
     seen.destroyed = view.destroyed;
-    seen.impact = impact;
   }
 
   function post(action, pending) {

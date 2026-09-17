@@ -195,23 +195,23 @@ ul.posts li { margin: 6px 0; }
     <form id="groupForm" class="panel" autocomplete="off" hidden>
       <h3 id="groupFormTitle">List your group</h3>
       <label for="groupName">Group name</label>
-      <input id="groupName" maxlength="80" required>
+      <input id="groupName">
       <label for="groupDescription">About your group</label>
-      <textarea id="groupDescription" maxlength="2000" required placeholder="Who you are, how many people, what kind of evening you have in mind"></textarea>
+      <textarea id="groupDescription" placeholder="Who you are, how many people, what kind of evening you have in mind"></textarea>
       <div class="row">
         <div>
           <label for="groupWhen">Rough time</label>
-          <input id="groupWhen" maxlength="120" required placeholder="e.g. {{DATE}}, around 19:30">
+          <input id="groupWhen" placeholder="e.g. {{DATE}}, around 19:30">
         </div>
         <div>
           <label for="groupLocation">Location or time zone</label>
-          <input id="groupLocation" maxlength="120" required placeholder="e.g. Munich, CEST (UTC+2)">
+          <input id="groupLocation" placeholder="e.g. Munich, CEST (UTC+2)">
         </div>
       </div>
       <label for="groupContact">Email or other contact</label>
-      <input id="groupContact" maxlength="200" required placeholder="Shown publicly">
+      <input id="groupContact" placeholder="Shown publicly">
       <label for="groupPassword">Password</label>
-      <input id="groupPassword" type="password" minlength="6" maxlength="200" required autocomplete="new-password">
+      <input id="groupPassword" type="password" autocomplete="new-password">
       <p class="hint" id="groupPasswordHint">You need this password to edit or delete your listing later. It cannot be recovered.</p>
       <div class="actions">
         <button id="groupSubmit" class="primary" type="submit">Publish</button>
@@ -240,21 +240,21 @@ ul.posts li { margin: 6px 0; }
           <fieldset>
             <legend>Country A</legend>
             <label for="name0">Name</label>
-            <input id="name0" maxlength="60" data-field="name" data-country="0">
+            <input id="name0" data-field="name" data-country="0">
             <label for="cons0">Consequence when hit</label>
-            <textarea id="cons0" maxlength="500" placeholder="e.g. We destroy our cake" data-field="consequence" data-country="0"></textarea>
+            <textarea id="cons0" placeholder="e.g. We destroy our cake" data-field="consequence" data-country="0"></textarea>
             <label for="rate0">False alarms (% per minute)</label>
-            <input id="rate0" type="number" min="0" max="10" step="any" data-field="rate" data-country="0">
+            <input id="rate0" type="number" min="0" step="any" data-field="rate" data-country="0">
             <p class="hint" id="estimate0"></p>
           </fieldset>
           <fieldset>
             <legend>Country B</legend>
             <label for="name1">Name</label>
-            <input id="name1" maxlength="60" data-field="name" data-country="1">
+            <input id="name1" data-field="name" data-country="1">
             <label for="cons1">Consequence when hit</label>
-            <textarea id="cons1" maxlength="500" placeholder="e.g. We destroy our cake" data-field="consequence" data-country="1"></textarea>
+            <textarea id="cons1" placeholder="e.g. We destroy our cake" data-field="consequence" data-country="1"></textarea>
             <label for="rate1">False alarms (% per minute)</label>
-            <input id="rate1" type="number" min="0" max="10" step="any" data-field="rate" data-country="1">
+            <input id="rate1" type="number" min="0" step="any" data-field="rate" data-country="1">
             <p class="hint" id="estimate1"></p>
           </fieldset>
         </div>
@@ -263,11 +263,11 @@ ul.posts li { margin: 6px 0; }
           <div class="row">
             <div>
               <label for="flight">Missile flight time and warning window (minutes)</label>
-              <input id="flight" type="number" min="0.17" max="60" step="any">
+              <input id="flight" type="number" min="0" step="any">
             </div>
             <div>
               <label for="duration">Expected duration of the evening (minutes)</label>
-              <input id="duration" type="number" min="1" max="1440" step="1">
+              <input id="duration" type="number" min="0" step="any">
             </div>
           </div>
           <p class="hint">The expected duration is only used for the false-alarm estimates. The game has no fixed end: it ends when a country requests the end and nothing is in flight.</p>
@@ -673,10 +673,10 @@ function groupsPage() {
       const listed = new Date(g.created).toLocaleDateString();
       const updated = g.updated !== g.created ? `, updated ${new Date(g.updated).toLocaleDateString()}` : "";
       return el("article", { className: "group" },
-        el("h3", { textContent: g.name }),
-        el("div", { className: "meta", textContent: `${g.when} · ${g.location}` }),
-        el("p", { className: "description", textContent: g.description }),
-        el("p", { className: "contact" }, "Contact: ", contactNode(g.contact)),
+        el("h3", { textContent: g.name || "Unnamed group" }),
+        g.when || g.location ? el("div", { className: "meta", textContent: [g.when, g.location].filter(Boolean).join(" · ") }) : null,
+        g.description ? el("p", { className: "description", textContent: g.description }) : null,
+        g.contact ? el("p", { className: "contact" }, "Contact: ", contactNode(g.contact)) : null,
         el("div", { className: "meta", textContent: `Listed ${listed}${updated}` }),
         manage,
       );
@@ -744,10 +744,12 @@ function gamePage(key) {
       s.names[c] = $(`name${c}`).value;
       s.consequences[c] = $(`cons${c}`).value;
       const rate = Number($(`rate${c}`).value);
-      s.false_alarm_percent_per_minute[c] = Number.isFinite(rate) ? rate : 0;
+      s.false_alarm_percent_per_minute[c] = Number.isFinite(rate) ? Math.max(0, rate) : 0;
     }
-    s.flight_secs = Math.round(Number($("flight").value) * 60);
-    s.expected_minutes = Math.round(Number($("duration").value));
+    const flight = Math.round(Number($("flight").value) * 60);
+    if ($("flight").value !== "" && Number.isFinite(flight)) s.flight_secs = Math.max(1, flight);
+    const duration = Math.round(Number($("duration").value));
+    if ($("duration").value !== "" && Number.isFinite(duration)) s.expected_minutes = Math.max(0, duration);
     return s;
   }
 

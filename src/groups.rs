@@ -70,12 +70,8 @@ pub struct GroupInput {
     pub password: String,
 }
 
-fn check(field: &str, value: &str, min: usize, max: usize) -> Result<(), String> {
-    let len = value.trim().chars().count();
-    if len < min {
-        return Err(format!("Please fill in the {field}."));
-    }
-    if len > max {
+fn check(field: &str, value: &str, max: usize) -> Result<(), String> {
+    if value.chars().count() > max {
         return Err(format!("The {field} can have at most {max} characters."));
     }
     Ok(())
@@ -83,17 +79,12 @@ fn check(field: &str, value: &str, min: usize, max: usize) -> Result<(), String>
 
 impl GroupInput {
     pub fn validate(&self) -> Result<(), String> {
-        check("name", &self.name, 1, 80)?;
-        check("description", &self.description, 1, 2000)?;
-        check("time", &self.when, 1, 120)?;
-        check("location or time zone", &self.location, 1, 120)?;
-        check("contact", &self.contact, 1, 200)?;
-        if self.password.chars().count() < 6 {
-            return Err("The password needs at least 6 characters.".into());
-        }
-        if self.password.len() > 200 {
-            return Err("The password can have at most 200 characters.".into());
-        }
+        check("name", &self.name, 1000)?;
+        check("description", &self.description, 20_000)?;
+        check("time", &self.when, 1000)?;
+        check("location or time zone", &self.location, 1000)?;
+        check("contact", &self.contact, 1000)?;
+        check("password", &self.password, 10_000)?;
         Ok(())
     }
 }
@@ -193,11 +184,16 @@ mod tests {
     }
 
     #[test]
-    fn validation_rejects_short_passwords_and_empty_fields() {
+    fn validation_accepts_any_password_and_empty_fields() {
         assert!(input("hunter42").validate().is_ok());
-        assert!(input("short").validate().is_err());
-        let mut empty = input("hunter42");
+        assert!(input("").validate().is_ok());
+        assert!(input("a").validate().is_ok());
+        let mut empty = input("");
         empty.contact = "  ".into();
-        assert!(empty.validate().is_err());
+        empty.name = String::new();
+        assert!(empty.validate().is_ok());
+        let mut huge = input("");
+        huge.name = "x".repeat(1001);
+        assert!(huge.validate().is_err());
     }
 }

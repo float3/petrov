@@ -1,8 +1,10 @@
 use rand::{Rng, distr::Alphanumeric};
 use serde::{Deserialize, Serialize};
 
-pub const MAX_NAME: usize = 60;
-pub const MAX_CONSEQUENCE: usize = 500;
+pub const MAX_NAME: usize = 1000;
+pub const MAX_CONSEQUENCE: usize = 20_000;
+const MAX_PERCENT_PER_MINUTE: f64 = 10_000.0;
+const MAX_FLIGHT_SECS: u64 = 365 * 24 * 60 * 60;
 pub const KEY_LEN: usize = 24;
 
 pub fn random_key(rng: &mut impl Rng, len: usize) -> String {
@@ -33,27 +35,24 @@ impl Default for Settings {
 impl Settings {
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.names.iter().any(|n| n.chars().count() > MAX_NAME) {
-            return Err("Names can have at most 60 characters.");
+            return Err("Names can have at most 1000 characters.");
         }
         if self
             .consequences
             .iter()
             .any(|c| c.chars().count() > MAX_CONSEQUENCE)
         {
-            return Err("Consequences can have at most 500 characters.");
+            return Err("Consequences can have at most 20000 characters.");
         }
         if self
             .false_alarm_percent_per_minute
             .iter()
-            .any(|r| !(0.0..=10.0).contains(r))
+            .any(|r| !(0.0..=MAX_PERCENT_PER_MINUTE).contains(r))
         {
-            return Err("False-alarm rates must be between 0 and 10 percent per minute.");
+            return Err("False-alarm rates must be between 0 and 10000 percent per minute.");
         }
-        if !(10..=3600).contains(&self.flight_secs) {
-            return Err("Flight time must be between 10 seconds and 60 minutes.");
-        }
-        if !(1..=24 * 60).contains(&self.expected_minutes) {
-            return Err("The expected duration must be between 1 minute and 24 hours.");
+        if !(1..=MAX_FLIGHT_SECS).contains(&self.flight_secs) {
+            return Err("Flight time must be at least a second and at most a year.");
         }
         Ok(())
     }

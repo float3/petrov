@@ -1,0 +1,554 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d0c">
+<title>Petrov Day</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='42' fill='%23c1121f'/></svg>">
+<style>
+:root {
+  --bg: #0b0d0c;
+  --panel: #151917;
+  --line: #2a302d;
+  --text: #e8e6df;
+  --muted: #8d918c;
+  --green: #7ddc8b;
+  --red: #e5383b;
+  --red-deep: #8a0f16;
+  --amber: #f4b942;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 16px/1.45 ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  min-height: 100dvh;
+  -webkit-tap-highlight-color: transparent;
+}
+main { max-width: 720px; margin: 0 auto; padding: 20px 16px 48px; }
+h1, h2, h3 { font-weight: 600; letter-spacing: .02em; margin: 0; }
+small, .muted { color: var(--muted); }
+small { text-transform: uppercase; letter-spacing: .12em; font-size: 11px; }
+a { color: var(--green); }
+[hidden] { display: none !important; }
+button, input, textarea { font: inherit; color: inherit; }
+button {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px 16px; cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--green); color: #07130a; border-color: var(--green); font-weight: 600; }
+label { display: block; margin: 14px 0 4px; color: var(--muted); font-size: 13px; }
+input, textarea {
+  width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px;
+}
+textarea { min-height: 64px; resize: vertical; }
+fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 4px 16px 16px; margin: 16px 0; }
+legend { padding: 0 6px; color: var(--green); }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.row > div { min-width: 0; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.error { color: var(--red); margin-top: 12px; }
+.links { margin-top: 24px; }
+.link { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 12px 0; }
+.link code { display: block; word-break: break-all; margin: 6px 0 10px; color: var(--green); }
+.hint { font-size: 13px; color: var(--muted); }
+
+.title { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+.title h1 { font-size: 22px; }
+
+header.stations { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+header.stations .right { text-align: right; }
+header.stations h1, header.stations h2 { font-size: 20px; overflow-wrap: anywhere; }
+.conn { font-size: 12px; margin-top: 8px; color: var(--green); }
+.conn.bad { color: var(--amber); }
+.clock { text-align: center; margin: 28px 0 8px; }
+.clock .big { font-size: clamp(44px, 14vw, 88px); font-variant-numeric: tabular-nums; line-height: 1.1; }
+
+.alert {
+  border: 2px solid var(--red); border-radius: 10px; padding: 18px; margin: 20px 0; text-align: center;
+  background: #2a0608; animation: pulse 1s steps(2, jump-none) infinite;
+}
+.alert h2 { color: var(--red); font-size: clamp(22px, 6vw, 34px); }
+.alert .big { font-size: clamp(56px, 20vw, 120px); font-variant-numeric: tabular-nums; line-height: 1; margin: 10px 0; color: #fff; }
+@keyframes pulse { 0% { background: #2a0608; } 100% { background: #5a0b10; } }
+body.alarm { animation: flash 1s steps(2, jump-none) infinite; }
+@keyframes flash { 0% { background: var(--bg); } 100% { background: #1e0406; } }
+
+.console { text-align: center; margin: 28px 0; }
+.launch {
+  position: relative; overflow: hidden; width: min(280px, 72vw); aspect-ratio: 1; border-radius: 50%;
+  border: 6px solid #3a0a0d; background: radial-gradient(circle at 35% 30%, #ff5a5f, var(--red) 45%, var(--red-deep));
+  box-shadow: 0 10px 0 #4a070b, 0 18px 40px rgba(229, 56, 59, .25);
+  color: #fff; font-weight: 700; font-size: 20px; letter-spacing: .08em; text-transform: uppercase;
+  touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.launch:active { transform: translateY(6px); box-shadow: 0 4px 0 #4a070b; }
+.launch:disabled { filter: grayscale(.85) brightness(.6); cursor: not-allowed; }
+.launch .fill { position: absolute; inset: auto 0 0 0; height: 0; background: rgba(0, 0, 0, .45); pointer-events: none; }
+.launch .label { position: relative; pointer-events: none; }
+.cover { margin-top: 12px; }
+.status { margin-top: 18px; min-height: 1.5em; }
+.status.red { color: var(--red); }
+
+.dead { text-align: center; padding: 48px 0 24px; }
+.dead h1 { font-size: clamp(30px, 9vw, 52px); color: var(--red); }
+.dead .consequence { font-size: clamp(20px, 5.5vw, 30px); margin: 24px 0; white-space: pre-wrap; }
+
+ul.log, ol.debrief { list-style: none; padding: 0; margin: 24px 0 0; border-top: 1px solid var(--line); }
+ul.log li, ol.debrief li { padding: 8px 0; border-bottom: 1px solid var(--line); display: flex; gap: 12px; }
+ul.log time, ol.debrief time { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.over { margin-top: 32px; }
+.over h2 { color: var(--green); }
+
+.overlay {
+  position: fixed; inset: 0; background: rgba(5, 6, 6, .96); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px; padding: 24px; text-align: center; z-index: 10;
+}
+.overlay p { max-width: 420px; color: var(--muted); }
+
+@media (max-width: 520px) {
+  .row { grid-template-columns: 1fr; gap: 0; }
+}
+</style>
+</head>
+<body>
+<main>
+  <section id="create" hidden>
+    <div class="title"><h1>Petrov Day</h1><small>multiplayer</small></div>
+    <p class="muted">Two houses, one red button each. Pressing it sends a missile at the other house, which sees an early warning and gets a short window to retaliate before impact. Early warning systems also produce false alarms that look exactly like real ones.</p>
+    <form id="form">
+      <fieldset>
+        <legend>House A</legend>
+        <label for="nameA">Name</label>
+        <input id="nameA" maxlength="60" placeholder="Hill's house">
+        <label for="consA">What happens if destroyed</label>
+        <textarea id="consA" maxlength="500">The ceremony ends. Everyone leaves in silence.</textarea>
+      </fieldset>
+      <fieldset>
+        <legend>House B</legend>
+        <label for="nameB">Name</label>
+        <input id="nameB" maxlength="60" placeholder="Omar's house">
+        <label for="consB">What happens if destroyed</label>
+        <textarea id="consB" maxlength="500">The ceremony ends. The cake is destroyed.</textarea>
+      </fieldset>
+      <fieldset>
+        <legend>Ceremony</legend>
+        <div class="row">
+          <div><label for="start">Buttons go live</label><input id="start" type="datetime-local" required></div>
+          <div><label for="end">Buttons go dark</label><input id="end" type="datetime-local" required></div>
+        </div>
+        <div class="row">
+          <div><label for="flight">Retaliation window (seconds)</label><input id="flight" type="number" min="10" max="600" value="60" required></div>
+          <div><label for="fa">Expected false alarms per house</label><input id="fa" type="number" min="0" max="10" step="0.1" value="0.5" required></div>
+        </div>
+        <p class="hint">False alarms are drawn at random when the game is created, so nobody, including you, knows whether or when they happen. Times use this device's time zone.</p>
+      </fieldset>
+      <div class="actions">
+        <button class="primary" type="submit">Create game</button>
+        <button type="button" id="drill">Create 10 minute drill</button>
+      </div>
+      <div id="createError" class="error"></div>
+    </form>
+    <div id="links" class="links"></div>
+  </section>
+
+  <section id="house" hidden>
+    <div id="overlay" class="overlay">
+      <h1>Petrov Day</h1>
+      <p>Enter to turn on the alarm sound and keep this screen awake. Leave this device plugged in, unlocked and in the room.</p>
+      <button class="primary" id="enter">Enter</button>
+    </div>
+
+    <header class="stations">
+      <div><small>Your house</small><h1 id="me">…</h1></div>
+      <div class="right"><small>Target</small><h2 id="enemy">…</h2></div>
+    </header>
+    <div id="conn" class="conn bad">connecting…</div>
+
+    <div id="notFound" hidden><p class="error">This link does not belong to any game.</p></div>
+
+    <div id="alive">
+      <div class="clock"><small id="clockLabel"></small><div id="clock" class="big">--:--</div></div>
+
+      <div id="alert" class="alert" hidden>
+        <h2>INCOMING MISSILE DETECTED</h2>
+        <div id="alertCount" class="big">--</div>
+        <div>seconds to impact</div>
+        <p class="muted">Early warning systems have been wrong before.</p>
+      </div>
+
+      <div class="console">
+        <button id="launch" class="launch" disabled><span class="fill"></span><span class="label" id="launchLabel">Launch</span></button>
+        <div><button id="cover" class="cover">Lift safety cover</button></div>
+        <div id="status" class="status"></div>
+      </div>
+    </div>
+
+    <div id="dead" class="dead" hidden>
+      <h1>Your house was destroyed</h1>
+      <div id="consequence" class="consequence"></div>
+    </div>
+
+    <ul id="log" class="log"></ul>
+
+    <div id="over" class="over" hidden>
+      <h2 id="overTitle">Petrov Day is over</h2>
+      <ol id="debrief" class="debrief"></ol>
+    </div>
+    <p class="actions"><button id="testSound" type="button">Test alarm sound</button></p>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const HOLD_MS = 3000;
+
+function pad(n) { return String(n).padStart(2, "0"); }
+function clock(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60;
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${pad(m)}:${pad(s % 60)}`;
+}
+function timeOfDay(t) { return new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+function localInput(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`; }
+function el(tag, props = {}, ...children) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+}
+function store(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+function persist(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+
+const sound = {
+  ctx: null,
+  siren: null,
+  unlock() {
+    try {
+      this.ctx ??= new (window.AudioContext || window.webkitAudioContext)();
+      this.ctx.resume();
+    } catch {}
+  },
+  alarm(on) {
+    const c = this.ctx;
+    if (!c) return;
+    if (on && !this.siren) {
+      const osc = c.createOscillator(), lfo = c.createOscillator(), depth = c.createGain(), gain = c.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.value = 820;
+      lfo.frequency.value = 0.9;
+      depth.gain.value = 340;
+      gain.gain.value = 0.22;
+      lfo.connect(depth).connect(osc.frequency);
+      osc.connect(gain).connect(c.destination);
+      osc.start();
+      lfo.start();
+      this.siren = { osc, lfo };
+    } else if (!on && this.siren) {
+      this.siren.osc.stop();
+      this.siren.lfo.stop();
+      this.siren = null;
+    }
+  },
+  boom(volume = 1) {
+    const c = this.ctx;
+    if (!c) return;
+    const len = c.sampleRate * 3, buf = c.createBuffer(1, len, c.sampleRate), data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const src = c.createBufferSource(), filter = c.createBiquadFilter(), gain = c.createGain();
+    src.buffer = buf;
+    filter.type = "lowpass";
+    filter.frequency.value = 500;
+    gain.gain.value = volume;
+    src.connect(filter).connect(gain).connect(c.destination);
+    src.start();
+  },
+};
+
+let wakeLock = null;
+async function keepAwake() {
+  try {
+    if ("wakeLock" in navigator && document.visibilityState === "visible" && !wakeLock) {
+      wakeLock = await navigator.wakeLock.request("screen");
+      wakeLock.addEventListener("release", () => { wakeLock = null; });
+    }
+  } catch {}
+}
+document.addEventListener("visibilitychange", keepAwake);
+
+function createPage() {
+  $("create").hidden = false;
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 19, 30);
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 20, 30);
+  $("start").value = localInput(start);
+  $("end").value = localInput(end);
+
+  const games = store("petrov-games", []);
+  games.forEach(showLinks);
+
+  async function create(body) {
+    $("createError").textContent = "";
+    try {
+      const res = await fetch("/api/games", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const game = { ...(await res.json()), start: body.start, end: body.end };
+      games.unshift(game);
+      persist("petrov-games", games.slice(0, 20));
+      showLinks(game, true);
+    } catch (e) {
+      $("createError").textContent = e.message;
+    }
+  }
+
+  function houses() {
+    return [
+      { name: $("nameA").value || $("nameA").placeholder, consequence: $("consA").value },
+      { name: $("nameB").value || $("nameB").placeholder, consequence: $("consB").value },
+    ];
+  }
+
+  $("form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    create({
+      start: new Date($("start").value).getTime(),
+      end: new Date($("end").value).getTime(),
+      flight_secs: Number($("flight").value),
+      false_alarms: Number($("fa").value),
+      houses: houses(),
+    });
+  });
+
+  $("drill").addEventListener("click", () => {
+    const now = Date.now();
+    create({ start: now + 30_000, end: now + 630_000, flight_secs: 20, false_alarms: 1, houses: houses() });
+  });
+
+  function showLinks(game, fresh) {
+    const box = el("div", { className: "link" },
+      el("div", {}, el("small", {}, `${new Date(game.start).toLocaleString()} – ${timeOfDay(game.end)}`)));
+    for (const h of game.houses) {
+      const url = `${location.origin}/h/${h.key}`;
+      const copy = el("button", { type: "button", textContent: "Copy link" });
+      copy.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(url); copy.textContent = "Copied"; } catch { copy.textContent = "Copy failed"; }
+      });
+      box.append(el("div", {}, el("strong", {}, h.name), el("code", {}, url), copy, " ", el("a", { href: url, target: "_blank", textContent: "Open" })));
+    }
+    box.append(el("p", { className: "hint", textContent: "Each link is secret and controls that house's button. Open it on the device that stays in that house." }));
+    if (fresh) $("links").prepend(box); else $("links").append(box);
+  }
+}
+
+function housePage(key) {
+  $("house").hidden = false;
+  let view = null, offset = 0, lastMessage = 0, armed = false, disarmTimer = null, holding = null, notice = null;
+  const seen = { destroyed: null, enemyDestroyed: null, outcomes: new Map(), first: true };
+  const now = () => Date.now() + offset;
+
+  $("enter").addEventListener("click", () => {
+    sound.unlock();
+    keepAwake();
+    $("overlay").hidden = true;
+  });
+  $("testSound").addEventListener("click", () => {
+    sound.unlock();
+    sound.alarm(true);
+    setTimeout(() => sound.alarm(false), 2000);
+  });
+
+  function accept(envelope) {
+    offset = envelope.now - Date.now();
+    view = envelope.view;
+    lastMessage = Date.now();
+    react();
+    render();
+  }
+
+  function react() {
+    if (seen.first) {
+      seen.first = false;
+      seen.destroyed = view.destroyed;
+      seen.enemyDestroyed = view.enemy_destroyed;
+      for (const w of view.warnings) seen.outcomes.set(w.detected, w.outcome);
+      return;
+    }
+    if (view.destroyed && !seen.destroyed) sound.boom(1);
+    if (view.enemy_destroyed && !seen.enemyDestroyed) sound.boom(0.35);
+    seen.destroyed = view.destroyed;
+    seen.enemyDestroyed = view.enemy_destroyed;
+    for (const w of view.warnings) {
+      if (!seen.outcomes.has(w.detected) && !w.outcome && navigator.vibrate) navigator.vibrate([400, 200, 400, 200, 400]);
+      seen.outcomes.set(w.detected, w.outcome);
+    }
+  }
+
+  function connect() {
+    fetch(`/api/h/${key}`).then(async (res) => {
+      if (res.status === 404) {
+        $("notFound").hidden = false;
+        $("alive").hidden = true;
+        $("overlay").hidden = true;
+        $("conn").hidden = true;
+        return;
+      }
+      if (res.ok) accept(await res.json());
+      const source = new EventSource(`/api/h/${key}/events`);
+      source.onmessage = (e) => accept(JSON.parse(e.data));
+    }).catch(() => setTimeout(connect, 3000));
+  }
+
+  function disarm() {
+    armed = false;
+    clearTimeout(disarmTimer);
+    cancelHold();
+    render();
+  }
+
+  $("cover").addEventListener("click", () => {
+    if (armed) return disarm();
+    armed = true;
+    clearTimeout(disarmTimer);
+    disarmTimer = setTimeout(disarm, 20_000);
+    render();
+  });
+
+  const button = $("launch");
+  function cancelHold() {
+    if (!holding) return;
+    cancelAnimationFrame(holding.frame);
+    holding = null;
+    button.querySelector(".fill").style.height = "0";
+  }
+  button.addEventListener("pointerdown", (e) => {
+    if (button.disabled) return;
+    sound.unlock();
+    button.setPointerCapture(e.pointerId);
+    const began = performance.now();
+    holding = { frame: 0 };
+    const tick = () => {
+      if (!holding) return;
+      const p = Math.min(1, (performance.now() - began) / HOLD_MS);
+      button.querySelector(".fill").style.height = `${p * 100}%`;
+      if (p >= 1) {
+        cancelHold();
+        fire();
+      } else {
+        holding.frame = requestAnimationFrame(tick);
+      }
+    };
+    holding.frame = requestAnimationFrame(tick);
+  });
+  for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) button.addEventListener(ev, cancelHold);
+  button.addEventListener("contextmenu", (e) => e.preventDefault());
+
+  async function fire() {
+    armed = false;
+    clearTimeout(disarmTimer);
+    notice = { text: "Launching…", until: Date.now() + 10_000 };
+    render();
+    try {
+      const res = await fetch(`/api/h/${key}/launch`, { method: "POST" });
+      if (!res.ok) throw new Error(await res.text());
+      notice = null;
+      accept(await res.json());
+    } catch (e) {
+      notice = { text: `Launch failed: ${e.message}`, until: Date.now() + 8_000 };
+      render();
+    }
+  }
+
+  function render() {
+    const connected = Date.now() - lastMessage < 25_000;
+    $("conn").textContent = connected ? "● connected" : "○ reconnecting…";
+    $("conn").classList.toggle("bad", !connected);
+    if (!view) return;
+
+    const t = now();
+    $("me").textContent = view.me;
+    $("enemy").textContent = view.enemy_destroyed ? `${view.enemy} (destroyed)` : view.enemy;
+    document.title = `Petrov Day · ${view.me}`;
+
+    const incoming = view.destroyed ? null : view.warnings.find((w) => !w.outcome);
+    sound.alarm(!!incoming);
+    document.body.classList.toggle("alarm", !!incoming);
+    $("alert").hidden = !incoming;
+    if (incoming) $("alertCount").textContent = Math.max(0, Math.ceil((incoming.impact - t) / 1000));
+
+    $("alive").hidden = !!view.destroyed;
+    $("dead").hidden = !view.destroyed;
+    $("consequence").textContent = view.consequence;
+
+    if (view.phase === "pending") {
+      $("clockLabel").textContent = `Buttons go live at ${timeOfDay(view.start)}`;
+      $("clock").textContent = clock(view.start - t);
+    } else if (view.phase === "active") {
+      $("clockLabel").textContent = `Buttons go dark at ${timeOfDay(view.end)}`;
+      $("clock").textContent = clock(view.end - t);
+    } else {
+      $("clockLabel").textContent = "Ceremony over";
+      $("clock").textContent = "00:00";
+    }
+
+    if (!view.can_launch) armed = false;
+    button.disabled = !view.can_launch || !armed;
+    $("cover").hidden = !view.can_launch;
+    $("cover").textContent = armed ? "Close safety cover" : "Lift safety cover";
+    $("launchLabel").textContent = !view.can_launch ? (view.launched ? "Launched" : "Locked")
+      : !armed ? "Covered"
+      : incoming ? "Hold to retaliate" : "Hold to launch";
+
+    const status = $("status");
+    status.classList.remove("red");
+    if (view.launched && !view.enemy_destroyed) {
+      status.textContent = `Missile in flight to ${view.enemy}. Impact in ${Math.max(0, Math.ceil((view.my_impact - t) / 1000))}s.`;
+      status.classList.add("red");
+    } else if (view.enemy_destroyed) {
+      status.textContent = `Your missile destroyed ${view.enemy}.`;
+      status.classList.add("red");
+    } else if (notice && Date.now() < notice.until) {
+      status.textContent = notice.text;
+    } else if (armed) {
+      status.textContent = `Hold the button for ${HOLD_MS / 1000} seconds to launch at ${view.enemy}.`;
+    } else if (view.phase === "pending") {
+      status.textContent = "The button is locked until the ceremony starts.";
+    } else {
+      status.textContent = "";
+    }
+
+    const entries = [];
+    for (const w of view.warnings) {
+      const result = w.outcome === "impact" ? " Impact." : w.outcome === "dud" ? " No detonation. Nothing happened." : "";
+      entries.push([w.detected, `Early warning: incoming missile from ${view.enemy}.${result}`]);
+    }
+    if (view.launched) entries.push([view.launched, `You launched at ${view.enemy}.`]);
+    if (view.enemy_destroyed) entries.push([view.enemy_destroyed, `${view.enemy} was destroyed.`]);
+    entries.sort((a, b) => a[0] - b[0]);
+    $("log").replaceChildren(...entries.map(([at, text]) => el("li", {}, el("time", {}, timeOfDay(at)), el("span", {}, text))));
+    $("log").hidden = entries.length === 0 || !!view.debrief;
+
+    $("over").hidden = view.phase !== "over";
+    if (view.debrief) {
+      const survived = !view.destroyed && !view.enemy_destroyed;
+      $("overTitle").textContent = survived ? "Petrov Day is over. Nobody was destroyed." : "Petrov Day is over.";
+      $("debrief").replaceChildren(...view.debrief.map((d) => el("li", {}, el("time", {}, timeOfDay(d.t)), el("span", {}, d.text))));
+    }
+  }
+
+  connect();
+  setInterval(render, 200);
+}
+
+const match = location.pathname.match(/^\/h\/([A-Za-z0-9]+)\/?$/);
+if (match) housePage(match[1]); else createPage();
+</script>
+</body>
+</html>

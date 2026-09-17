@@ -154,8 +154,8 @@ details > div { padding: 0 16px 16px; }
 
   <section id="home" hidden>
     <div class="title"><h1>Petrov Day</h1><small>a ritual for two countries</small></div>
-    <p>On 26 September 1983, Stanislav Petrov's early warning system reported incoming American missiles. He judged it a false alarm and did not pass it up the chain of command. He was right.</p>
-    <p class="muted">Two groups, two countries. Each can launch one missile at the other. The target sees a warning and a countdown, and may retaliate before impact. Detection systems occasionally raise false alarms. There is no score and no winner. Nothing happening is the good outcome.</p>
+    <p>On 26 September 1983, Stanislav Petrov decided not to pass a missile warning up the chain of command.</p>
+    <p class="muted">Two groups, two countries. Each can launch one missile at the other. The target sees a warning and a countdown, and may retaliate before impact. There is no score and no winner. Nothing happening is the good outcome.</p>
     <div class="actions">
       <button id="createGame" class="primary big">Create a game</button>
       <a href="/check">Pre-flight check for this device</a>
@@ -172,6 +172,7 @@ details > div { padding: 0 16px 16px; }
     <div class="title"><h1>Petrov Day</h1><small id="gameStatus"></small></div>
     <div id="gameSetup" hidden>
       <p class="hint">Send this game link to the host of the other country. Each host claims their own country below, and each country can be claimed only once. If your country is already claimed and it was not you, someone took your seat: set up a new game. Anyone with this game link can change the settings until the game is live.</p>
+      <p class="hint">Keep the false alarms between the hosts. Countries are never told that false alarms exist or at what rate, until the reveal at the end.</p>
       <div class="row" id="claims"></div>
       <form id="settingsForm" autocomplete="off">
         <div class="row">
@@ -455,15 +456,12 @@ function subscribe(snapshotUrl, eventsUrl, onView, onMissing) {
 }
 
 function renderSettingsSummary(container, names, settings) {
-  const minutes = settings.expected_minutes;
   container.replaceChildren(el("div", { className: "panel consequences" },
     el("h3", { textContent: "Settings" }),
     el("p", { textContent: `Missile flight time and warning window: ${countdown(settings.flight_secs * 1000)}` }),
-    ...[0, 1].map((c) => el("div", {},
-      el("p", {}, el("strong", { textContent: names[c] }),
-        ` · false alarms ${settings.false_alarm_percent_per_minute[c]}% per minute (≈ ${percent(falseAlarmChance(settings.false_alarm_percent_per_minute[c], minutes))} over ${minutes} minutes)`),
-      el("p", { className: "muted", textContent: `When hit: ${settings.consequences[c].trim() || "(no consequence set)"}` }),
-    )),
+    ...[0, 1].map((c) => el("p", {},
+      el("strong", { textContent: `${names[c]} when hit: ` }),
+      settings.consequences[c].trim() || "(no consequence set)")),
   ));
 }
 

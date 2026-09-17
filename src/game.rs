@@ -66,6 +66,12 @@ impl Settings {
     }
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+pub struct CountrySettings {
+    pub consequences: [String; 2],
+    pub flight_secs: u64,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Country {
     pub key: Option<String>,
@@ -158,7 +164,7 @@ pub struct CountryView {
     pub status: Status,
     pub me: usize,
     pub names: [String; 2],
-    pub settings: Settings,
+    pub settings: CountrySettings,
     pub countries: Option<[CountryStatus; 2]>,
     pub live_at: Option<u64>,
     pub destroyed: Option<u64>,
@@ -474,7 +480,10 @@ impl Game {
             status,
             me: country,
             names,
-            settings: self.settings.clone(),
+            settings: CountrySettings {
+                consequences: self.settings.consequences.clone(),
+                flight_secs: self.settings.flight_secs,
+            },
             countries,
             live_at: self.live_at,
             destroyed: self.destroyed_at(country, now),
@@ -834,6 +843,19 @@ mod tests {
             g.reveal().headline,
             "A retaliated against a false alarm and destroyed B."
         );
+    }
+
+    #[test]
+    fn countries_are_never_told_about_false_alarm_rates() {
+        let (g, _) = live_game([0.5, 0.5]);
+        let mut rng = rng();
+        let setup = Game::new(0, &mut rng);
+        for json in [
+            serde_json::to_string(&g.country_view(0, 5_000)).unwrap(),
+            serde_json::to_string(&setup.country_view(1, 5_000)).unwrap(),
+        ] {
+            assert!(!json.contains("false_alarm"), "{json}");
+        }
     }
 
     #[test]

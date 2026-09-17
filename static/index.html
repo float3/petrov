@@ -369,6 +369,14 @@ function el(tag, props = {}, ...children) {
   node.append(...children.filter((c) => c !== null && c !== undefined));
   return node;
 }
+function memo(build) {
+  let last = null;
+  return (key, ...args) => {
+    if (key === last) return;
+    last = key;
+    build(...args);
+  };
+}
 function store(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
 }
@@ -489,10 +497,13 @@ async function keepAwake() {
 document.addEventListener("visibilitychange", keepAwake);
 
 function subscribe(snapshotUrl, eventsUrl, onView, onMissing) {
-  const state = { offset: 0, lastMessage: 0, source: null, open: false, closedAt: null };
+  const state = { offset: 0, lastMessage: 0, lastView: null, source: null, open: false, closedAt: null };
   function accept(envelope) {
     state.offset = envelope.now - Date.now();
     state.lastMessage = Date.now();
+    const view = JSON.stringify(envelope.view);
+    if (view === state.lastView) return;
+    state.lastView = view;
     onView(envelope.view);
   }
   async function connect() {
@@ -865,8 +876,9 @@ function gamePage(key) {
 
 function countryPage(key) {
   $("country").hidden = false;
-  let view = null, armed = false, disarmTimer = null, holding = null, notice = null, confirmingEnd = false;
+  let view = null, version = 0, armed = false, disarmTimer = null, holding = null, notice = null, confirmingEnd = false;
   let hiddenSince = null;
+  let hitClosed = store(`hit-closed-${key}`, false);
   const acked = new Set(store(`acked-${key}`, []));
   const seen = { first: true, warnings: new Set(), destroyed: null, impact: false };
   const warningCards = new Map();
@@ -879,7 +891,7 @@ function countryPage(key) {
   preflight($("checkBoxBody"), () => sub.connected() ? "Live updates are connected." : "Live updates are NOT connected.");
 
   $("unlockBanner").onclick = () => { sound.unlock(); render(); };
-  $("hitClose").onclick = () => { persist(`hit-closed-${key}`, true); render(); };
+  $("hitClose").onclick = () => { hitClosed = true; persist(`hit-closed-${key}`, true); render(); };
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") {
@@ -894,6 +906,7 @@ function countryPage(key) {
 
   const sub = subscribe(`/api/k/${key}`, `/api/k/${key}/events`, (v) => {
     view = v;
+    version++;
     react();
     render();
   }, () => {
@@ -997,6 +1010,14 @@ function countryPage(key) {
     return card.node;
   }
 
+  const showReadiness = memo((mine, theirs) => $("readiness").replaceChildren(...[mine, theirs].map((c, i) => el("li", {},
+    el("strong", { textContent: `${c.name}${i === 0 ? " (you)" : ""}: ` }),
+    el("span", { className: c.started ? "ok" : c.claimed ? "warn" : "muted", textContent: c.started ? "pressed Start" : c.claimed ? "claimed, not started" : "not claimed yet" })))));
+  const showSettings = memo((names, settings) => renderSettingsSummary($("setupSettings"), names, settings));
+  const showLog = memo((entries) => $("log").replaceChildren(...entries.map(([t, text]) =>
+    el("li", {}, el("time", { textContent: timeOfDay(t) }), el("span", { textContent: text })))));
+  const showReveal = memo((reveal, names, settings) => renderReveal($("countryReveal"), reveal, names, settings));
+
   let lastBeep = 0, lastVibrate = 0;
   function render() {
     const connected = sub.connected();
@@ -1017,15 +1038,13 @@ function countryPage(key) {
 
     if (view.status === "setup") {
       const [mine, theirs] = [view.countries[me], view.countries[1 - me]];
-      $("readiness").replaceChildren(...[mine, theirs].map((c, i) => el("li", {},
-        el("strong", { textContent: `${c.name}${i === 0 ? " (you)" : ""}: ` }),
-        el("span", { className: c.started ? "ok" : c.claimed ? "warn" : "muted", textContent: c.started ? "pressed Start" : c.claimed ? "claimed, not started" : "not claimed yet" }))));
+      showReadiness(version, mine, theirs);
       $("startButton").disabled = mine.started;
       $("startButton").textContent = mine.started ? "Started" : "Start";
       $("startHint").textContent = notice && Date.now() < notice.until ? notice.text
         : mine.started ? `Waiting for ${theirs.name}. The game goes live when both countries have pressed Start. Changing the settings resets Start.`
         : "Press Start when your country is gathered and ready. The game goes live when both countries have pressed Start.";
-      renderSettingsSummary($("setupSettings"), names, view.settings);
+      showSettings(version, names, view.settings);
     }
 
     const active = view.status === "live" ? view.warnings.filter((w) => !w.result) : [];
@@ -1083,12 +1102,11 @@ function countryPage(key) {
       }
       if (view.end_requested) entries.push([view.end_requested, "Your country requested the end."]);
       entries.sort((a, b) => a[0] - b[0]);
-      $("log").replaceChildren(...entries.map(([t, text]) => el("li", {}, el("time", { textContent: timeOfDay(t) }), el("span", { textContent: text }))));
+      showLog(`${version}|${entries.length}`, entries);
     }
 
-    if (view.status === "over" && view.reveal) renderReveal($("countryReveal"), view.reveal, names, view.settings);
+    if (view.status === "over" && view.reveal) showReveal(version, view.reveal, names, view.settings);
 
-    const hitClosed = store(`hit-closed-${key}`, false);
     $("hit").hidden = !view.destroyed || hitClosed;
     $("hitConsequence").textContent = view.settings.consequences[me].trim() || "Carry out your consequence.";
 

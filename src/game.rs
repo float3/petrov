@@ -68,7 +68,6 @@ impl Settings {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Country {
-    pub claim_token: String,
     pub key: Option<String>,
     pub started: bool,
 }
@@ -175,7 +174,6 @@ pub struct ClaimSlot {
     pub name: String,
     pub claimed: bool,
     pub started: bool,
-    pub claim_token: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -192,19 +190,9 @@ pub struct GameView {
     pub reveal: Option<Reveal>,
 }
 
-#[derive(Debug, PartialEq, Serialize)]
-pub struct ClaimView {
-    pub status: Status,
-    pub country: usize,
-    pub names: [String; 2],
-    pub settings: Settings,
-    pub claimed: bool,
-}
-
 impl Game {
     pub fn new(now: u64, rng: &mut impl Rng) -> Game {
-        let country = |rng: &mut _| Country {
-            claim_token: random_key(rng, KEY_LEN),
+        let country = || Country {
             key: None,
             started: false,
         };
@@ -213,7 +201,7 @@ impl Game {
             created: now,
             last_seen: now,
             settings: Settings::default(),
-            countries: [country(rng), country(rng)],
+            countries: [country(), country()],
             live_at: None,
             clock: now,
             next_false_alarm: [None, None],
@@ -356,7 +344,9 @@ impl Game {
 
     pub fn claim(&mut self, country: usize, rng: &mut impl Rng) -> Result<String, &'static str> {
         if self.countries[country].key.is_some() {
-            return Err("This claim link has already been used.");
+            return Err(
+                "This country has already been claimed. If that was not your host, set up a new game.",
+            );
         }
         let key = random_key(rng, KEY_LEN);
         self.countries[country].key = Some(key.clone());
@@ -513,26 +503,12 @@ impl Game {
                 name: names[c].clone(),
                 claimed: self.countries[c].key.is_some(),
                 started: self.countries[c].started,
-                claim_token: self.countries[c]
-                    .key
-                    .is_none()
-                    .then(|| self.countries[c].claim_token.clone()),
             }),
         });
         GameView {
             status,
             setup,
             reveal: (status == Status::Over).then(|| self.reveal()),
-        }
-    }
-
-    pub fn claim_view(&self, country: usize) -> ClaimView {
-        ClaimView {
-            status: self.status(),
-            country,
-            names: self.names(),
-            settings: self.settings.clone(),
-            claimed: self.countries[country].key.is_some(),
         }
     }
 
@@ -681,16 +657,12 @@ mod tests {
     }
 
     #[test]
-    fn claim_links_work_once() {
+    fn countries_can_be_claimed_once() {
         let mut rng = rng();
         let mut g = Game::new(0, &mut rng);
         assert!(g.claim(1, &mut rng).is_ok());
         assert!(g.claim(1, &mut rng).is_err());
-        assert!(
-            g.game_view().setup.unwrap().countries[1]
-                .claim_token
-                .is_none()
-        );
+        assert!(g.game_view().setup.unwrap().countries[1].claimed);
     }
 
     #[test]

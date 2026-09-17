@@ -171,7 +171,7 @@ details > div { padding: 0 16px 16px; }
   <section id="game" hidden>
     <div class="title"><h1>Petrov Day</h1><small id="gameStatus"></small></div>
     <div id="gameSetup" hidden>
-      <p class="hint">Anyone with this game link can change the settings until the game is live. Send each host their claim link. Each claim link works once.</p>
+      <p class="hint">Send this game link to the host of the other country. Each host claims their own country below, and each country can be claimed only once. If your country is already claimed and it was not you, someone took your seat: set up a new game. Anyone with this game link can change the settings until the game is live.</p>
       <div class="row" id="claims"></div>
       <form id="settingsForm" autocomplete="off">
         <div class="row">
@@ -216,13 +216,6 @@ details > div { padding: 0 16px 16px; }
     <div id="gameLive" hidden><p class="status-line">The game is live.</p></div>
     <div id="gameReveal" hidden></div>
     <p id="gameMissing" class="error" hidden>This game link is not valid. The game may have been deleted.</p>
-  </section>
-
-  <section id="claim" hidden>
-    <div class="title"><h1 id="claimTitle">Claim</h1></div>
-    <div id="claimBody"></div>
-    <div class="actions"><button id="claimButton" class="primary big" hidden>Claim</button></div>
-    <p id="claimError" class="error"></p>
   </section>
 
   <section id="country" hidden>
@@ -638,33 +631,38 @@ function gamePage(key) {
   });
   $("settingsForm").addEventListener("submit", (e) => e.preventDefault());
 
-  const claimCards = [0, 1].map((c) => {
+  const claimCards = [0, 1].map(() => {
     const card = el("div", { className: "panel" });
     $("claims").append(card);
-    return { card, token: null };
+    return { card, state: null };
   });
+
+  async function claimCountry(c, button, error) {
+    button.disabled = true;
+    try {
+      const { country } = await api("POST", `/api/g/${key}/claim/${c}`);
+      location.href = `/k/${country}`;
+    } catch (e) {
+      error.textContent = e.message;
+      button.disabled = false;
+    }
+  }
 
   function renderClaims(setup) {
     setup.countries.forEach((slot, c) => {
       const entry = claimCards[c];
-      if (slot.claim_token && entry.token === slot.claim_token) {
-        entry.card.querySelector("h3").textContent = slot.name;
-        return;
-      }
-      entry.token = slot.claim_token;
-      if (slot.claim_token) {
-        const url = `${location.origin}/c/${slot.claim_token}`;
-        const qr = el("div", { className: "qr", hidden: true });
-        const copyButton = el("button", { textContent: "Copy link" });
-        copyButton.onclick = () => copy(copyButton, url);
-        const qrButton = el("button", { textContent: "QR code" });
-        qrButton.onclick = () => { qr.hidden = !qr.hidden; if (!qr.hidden && !qr.firstChild) showQr(qr, url); };
+      const state = `${slot.name}|${slot.claimed}|${slot.started}`;
+      if (entry.state === state) return;
+      entry.state = state;
+      if (!slot.claimed) {
+        const error = el("p", { className: "error" });
+        const button = el("button", { className: "primary", textContent: `Claim ${slot.name}` });
+        button.onclick = () => claimCountry(c, button, error);
         entry.card.replaceChildren(
           el("h3", { textContent: slot.name }),
-          el("small", { textContent: "Claim link, works once" }),
-          el("a", { className: "link", href: url, textContent: url }),
-          el("div", { className: "actions" }, copyButton, qrButton),
-          qr,
+          el("p", { className: "hint", textContent: `Only the host of ${slot.name} should press this. It takes you to your country link, which you then share with your citizens.` }),
+          button,
+          error,
         );
       } else {
         entry.card.replaceChildren(
@@ -688,40 +686,6 @@ function gamePage(key) {
     }
     if (v.reveal) renderReveal($("gameReveal"), v.reveal);
   }, () => { $("gameMissing").hidden = false; });
-}
-
-function claimPage(token) {
-  $("claim").hidden = false;
-  api("GET", `/api/claim/${token}`).then(({ view }) => {
-    const name = view.names[view.country], other = view.names[1 - view.country];
-    $("claimTitle").textContent = view.claimed ? "Claim link used" : `Claim ${name}`;
-    if (view.claimed) {
-      $("claimBody").replaceChildren(el("p", { textContent: `${name} has already been claimed. Ask its host for the country link. If it is lost, set up a new game.` }));
-      return;
-    }
-    const summary = el("div");
-    renderSettingsSummary(summary, view.names, view.settings);
-    $("claimBody").replaceChildren(
-      el("p", { textContent: `You are about to become the host of ${name} in a Petrov Day ritual with ${other}. You will get a country link to share with your citizens.` }),
-      summary,
-    );
-    $("claimButton").textContent = `Claim ${name}`;
-    $("claimButton").hidden = false;
-  }).catch((e) => {
-    $("claimTitle").textContent = "Claim link not valid";
-    $("claimError").textContent = e.status === 404 ? "This claim link does not belong to any game." : e.message;
-  });
-
-  $("claimButton").addEventListener("click", async () => {
-    $("claimButton").disabled = true;
-    try {
-      const { country } = await api("POST", `/api/claim/${token}`);
-      location.replace(`/k/${country}`);
-    } catch (e) {
-      $("claimError").textContent = e.message;
-      $("claimButton").disabled = false;
-    }
-  });
 }
 
 function countryPage(key) {
@@ -969,9 +933,8 @@ function countryPage(key) {
 }
 
 const path = location.pathname.replace(/\/+$/, "");
-const route = path.match(/^\/(g|c|k)\/([A-Za-z0-9]+)$/);
+const route = path.match(/^\/(g|k)\/([A-Za-z0-9]+)$/);
 if (route && route[1] === "g") gamePage(route[2]);
-else if (route && route[1] === "c") claimPage(route[2]);
 else if (route && route[1] === "k") countryPage(route[2]);
 else if (path === "/check") checkPage();
 else homePage();

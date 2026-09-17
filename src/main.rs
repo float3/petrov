@@ -89,15 +89,6 @@ fn find_country(games: &Games, key: &str) -> Option<(String, usize)> {
     })
 }
 
-fn find_claim(games: &Games, token: &str) -> Option<(String, usize)> {
-    games.values().find_map(|g| {
-        g.countries
-            .iter()
-            .position(|c| c.claim_token == token)
-            .map(|i| (g.key.clone(), i))
-    })
-}
-
 async fn with_game<R>(app: &App, game_key: &str, f: impl FnOnce(&mut Game, u64) -> R) -> Option<R> {
     let now = now_ms();
     let mut games = app.games.lock().await;
@@ -170,25 +161,11 @@ async fn update_settings(
     }
 }
 
-async fn claim_state(State(app): State<Shared>, Path(token): Path<String>) -> Response {
-    let Some((game_key, country)) = find_claim(&app.games.lock().await, &token) else {
+async fn claim(State(app): State<Shared>, Path((key, country)): Path<(String, usize)>) -> Response {
+    if country > 1 {
         return not_found();
-    };
-    match with_game(&app, &game_key, |g, now| {
-        envelope(now, &g.claim_view(country))
-    })
-    .await
-    {
-        Some(body) => json_response(body),
-        None => not_found(),
     }
-}
-
-async fn claim(State(app): State<Shared>, Path(token): Path<String>) -> Response {
-    let Some((game_key, country)) = find_claim(&app.games.lock().await, &token) else {
-        return not_found();
-    };
-    let result = with_game(&app, &game_key, |g, _| g.claim(country, &mut rand::rng())).await;
+    let result = with_game(&app, &key, |g, _| g.claim(country, &mut rand::rng())).await;
     match result {
         None => not_found(),
         Some(Err(msg)) => error(StatusCode::GONE, msg),
@@ -391,7 +368,6 @@ async fn main() {
         .route("/", get(index))
         .route("/check", get(index))
         .route("/g/{key}", get(index))
-        .route("/c/{token}", get(index))
         .route("/k/{key}", get(index))
         .route(
             "/manifest.webmanifest",
@@ -412,7 +388,7 @@ async fn main() {
         .route("/api/g/{key}", get(game_state))
         .route("/api/g/{key}/events", get(game_events))
         .route("/api/g/{key}/settings", put(update_settings))
-        .route("/api/claim/{token}", get(claim_state).post(claim))
+        .route("/api/g/{key}/claim/{country}", post(claim))
         .route("/api/k/{key}", get(country_state))
         .route("/api/k/{key}/events", get(country_events))
         .route("/api/k/{key}/start", post(start))

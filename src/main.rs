@@ -363,6 +363,9 @@ async fn create_group(State(app): State<Shared>, Json(input): Json<GroupInput>) 
     if let Err(msg) = input.validate() {
         return error(StatusCode::BAD_REQUEST, &msg);
     }
+    if app.groups.lock().await.len() >= groups::MAX_GROUPS {
+        return error(StatusCode::SERVICE_UNAVAILABLE, "The list is full.");
+    }
     let password = input.password.clone();
     let hash = tokio::task::spawn_blocking(move || groups::hash_password(&password))
         .await

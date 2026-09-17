@@ -142,6 +142,9 @@ h2 { font-size: 19px; margin: 32px 0 8px; }
 ul.posts { padding-left: 20px; margin: 4px 0; }
 ul.posts li { margin: 6px 0; }
 .home-links { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 8px 0 16px; }
+footer.site { margin-top: 48px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+footer.site a { color: var(--muted); }
+footer.site a:hover { color: var(--green); }
 .group { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin: 16px 0; }
 .group h3 { font-size: 18px; margin: 0 0 4px; overflow-wrap: anywhere; }
 .group .meta { color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
@@ -345,6 +348,10 @@ ul.posts li { margin: 6px 0; }
       <button id="hitClose">Show the rest</button>
     </div>
   </section>
+
+  <footer id="siteFooter" class="site" hidden>
+    <a href="https://github.com/float3/petrov">Source on GitHub</a> — patches, corrections and links welcome.
+  </footer>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
@@ -1108,6 +1115,8 @@ else if (path === "/check") checkPage();
 else if (path === "/groups") groupsPage();
 else if (path === "/info") $("info").hidden = false;
 else homePage();
+
+if (!route) $("siteFooter").hidden = false;
 </script>
 </body>
 </html>

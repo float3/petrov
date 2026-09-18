@@ -1,4 +1,4 @@
-use rand::{Rng, distr::Alphanumeric};
+use rand::{Rng, RngExt, distr::Alphanumeric};
 use serde::{Deserialize, Serialize};
 
 pub const MAX_NAME: usize = 1000;

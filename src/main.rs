@@ -14,7 +14,7 @@ use axum::{
     routing::{get, post, put},
 };
 use brand::Brand;
-use game::{Game, Settings};
+use game::{Access, Game, Settings};
 use groups::{Group, GroupInput};
 use qrcode::{QrCode, render::svg};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -112,12 +112,10 @@ fn save(app: &App, games: &HashMap<String, Game>) {
     write_json(&app.state_path, games);
 }
 
-fn find_country(games: &Games, key: &str) -> Option<(String, usize)> {
+fn find_country(games: &Games, key: &str) -> Option<(String, usize, Access)> {
     games.values().find_map(|g| {
-        g.countries
-            .iter()
-            .position(|c| c.key.as_deref() == Some(key))
-            .map(|i| (g.key.clone(), i))
+        g.country_for(key)
+            .map(|(country, access)| (g.key.clone(), country, access))
     })
 }
 
@@ -137,10 +135,10 @@ async fn with_game<R>(app: &App, game_key: &str, f: impl FnOnce(&mut Game, u64) 
 async fn with_country<R>(
     app: &App,
     key: &str,
-    f: impl FnOnce(&mut Game, usize, u64) -> R,
+    f: impl FnOnce(&mut Game, usize, Access, u64) -> R,
 ) -> Option<R> {
-    let (game_key, country) = find_country(&app.games.lock().await, key)?;
-    with_game(app, &game_key, |g, now| f(g, country, now)).await
+    let (game_key, country, access) = find_country(&app.games.lock().await, key)?;
+    with_game(app, &game_key, |g, now| f(g, country, access, now)).await
 }
 
 async fn persist(app: &App) {
@@ -209,8 +207,8 @@ async fn claim(State(app): State<Shared>, Path((key, country)): Path<(String, us
 }
 
 async fn country_state(State(app): State<Shared>, Path(key): Path<String>) -> Response {
-    match with_country(&app, &key, |g, c, now| {
-        envelope(now, &g.country_view(c, now))
+    match with_country(&app, &key, |g, c, access, now| {
+        envelope(now, &g.country_view(c, access, now))
     })
     .await
     {
@@ -224,13 +222,18 @@ async fn country_action(
     key: String,
     action: impl FnOnce(&mut Game, usize, u64) -> Result<(), &'static str>,
 ) -> Response {
-    let result = with_country(&app, &key, |g, c, now| {
-        action(g, c, now).map(|()| envelope(now, &g.country_view(c, now)))
+    let result = with_country(&app, &key, |g, c, access, now| {
+        if access == Access::Watch {
+            return Err((StatusCode::FORBIDDEN, "This link can only watch."));
+        }
+        action(g, c, now)
+            .map(|()| envelope(now, &g.country_view(c, access, now)))
+            .map_err(|msg| (StatusCode::CONFLICT, msg))
     })
     .await;
     match result {
         None => not_found(),
-        Some(Err(msg)) => error(StatusCode::CONFLICT, msg),
+        Some(Err((status, msg))) => error(status, msg),
         Some(Ok(body)) => {
             persist(&app).await;
             json_response(body)
@@ -313,13 +316,13 @@ async fn game_events(State(app): State<Shared>, Path(key): Path<String>) -> Resp
 }
 
 async fn country_events(State(app): State<Shared>, Path(key): Path<String>) -> Response {
-    let Some((game_key, country)) = find_country(&app.games.lock().await, &key) else {
+    let Some((game_key, country, access)) = find_country(&app.games.lock().await, &key) else {
         return not_found();
     };
     let shared = app.clone();
     stream(app, move |games, now| {
         tick_game(&shared, games, &game_key, now).then(|| {
-            serde_json::to_string(&games[&game_key].country_view(country, now))
+            serde_json::to_string(&games[&game_key].country_view(country, access, now))
                 .expect("view serializes")
         })
     })
@@ -486,7 +489,10 @@ async fn main() {
         PathBuf::from(std::env::var("PETROV_STATE").unwrap_or_else(|_| "games.json".into()));
 
     let groups_path = state_path.with_file_name("groups.json");
-    let games: HashMap<String, Game> = read_json(&state_path);
+    let mut games: HashMap<String, Game> = read_json(&state_path);
+    for game in games.values_mut() {
+        game.backfill_watch_keys(&mut rand::rng());
+    }
     let groups: Vec<Group> = read_json(&groups_path);
 
     let brand_name = std::env::var("PETROV_BRAND").unwrap_or_else(|_| "petrov".into());

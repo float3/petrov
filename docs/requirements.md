@@ -24,6 +24,9 @@ outcome.
   citizens (a QR code is nice to have). Anyone holding the country link is that country, on any number of devices,
   and all of them show the same live state. The host has no special powers: any device can
   press Start, launch or request the end.
+- Each country also gets a watch-only link. It shows the same live state, alarms included,
+  but cannot press Start, launch or request the end. The country decides who gets which link;
+  how it decides to launch stays up to its own rules, not the app.
 - Both consequences are visible to both countries.
 - No accounts and no invitations. The host shares the links themselves.
 

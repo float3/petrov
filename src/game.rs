@@ -77,7 +77,17 @@ pub struct CountrySettings {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Country {
     pub key: Option<String>,
+    #[serde(default)]
+    pub watch_key: Option<String>,
     pub started: bool,
+}
+
+/// What a country link lets its holder do: the command link can start, launch
+/// and request the end; the watch link only sees what the country sees.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Access {
+    Command,
+    Watch,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -175,6 +185,8 @@ pub struct CountryView {
     pub end_requested: Option<u64>,
     pub can_launch: bool,
     pub reveal: Option<Reveal>,
+    pub watch_only: bool,
+    pub watch_key: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -202,6 +214,7 @@ impl Game {
     pub fn new(now: u64, rng: &mut impl Rng) -> Game {
         let country = || Country {
             key: None,
+            watch_key: None,
             started: false,
         };
         Game {
@@ -361,7 +374,29 @@ impl Game {
         }
         let key = random_key(rng, KEY_LEN);
         self.countries[country].key = Some(key.clone());
+        self.countries[country].watch_key = Some(random_key(rng, KEY_LEN));
         Ok(key)
+    }
+
+    /// Gives countries claimed before watch links existed a watch link.
+    pub fn backfill_watch_keys(&mut self, rng: &mut impl Rng) {
+        for country in &mut self.countries {
+            if country.key.is_some() && country.watch_key.is_none() {
+                country.watch_key = Some(random_key(rng, KEY_LEN));
+            }
+        }
+    }
+
+    pub fn country_for(&self, key: &str) -> Option<(usize, Access)> {
+        self.countries.iter().enumerate().find_map(|(i, c)| {
+            if c.key.as_deref() == Some(key) {
+                Some((i, Access::Command))
+            } else if c.watch_key.as_deref() == Some(key) {
+                Some((i, Access::Watch))
+            } else {
+                None
+            }
+        })
     }
 
     pub fn start(
@@ -444,7 +479,7 @@ impl Game {
         Ok(())
     }
 
-    pub fn country_view(&self, country: usize, now: u64) -> CountryView {
+    pub fn country_view(&self, country: usize, access: Access, now: u64) -> CountryView {
         let other = 1 - country;
         let status = self.status();
         let names = self.names();
@@ -502,8 +537,10 @@ impl Game {
                 }),
             warnings,
             end_requested: self.end_requests[country],
-            can_launch: self.can_launch(country, now).is_ok(),
+            can_launch: access == Access::Command && self.can_launch(country, now).is_ok(),
             reveal: (status == Status::Over).then(|| self.reveal()),
+            watch_only: access == Access::Watch,
+            watch_key: self.countries[country].watch_key.clone(),
         }
     }
 
@@ -652,6 +689,7 @@ mod tests {
         for w in v["warnings"].as_array_mut().unwrap() {
             w.as_object_mut().unwrap().remove("id");
         }
+        v.as_object_mut().unwrap().remove("watch_key");
         v
     }
 
@@ -706,21 +744,21 @@ mod tests {
             real.advance(t, &mut rng);
             fake.advance(t, &mut rng);
             assert_eq!(
-                without_ids(&real.country_view(1, t)),
-                without_ids(&fake.country_view(1, t))
+                without_ids(&real.country_view(1, Access::Command, t)),
+                without_ids(&fake.country_view(1, Access::Command, t))
             );
         }
 
         let t = 50_000 + FLIGHT;
         real.advance(t, &mut rng);
         fake.advance(t, &mut rng);
-        let hit = real.country_view(1, t);
-        let spared = fake.country_view(1, t);
+        let hit = real.country_view(1, Access::Command, t);
+        let spared = fake.country_view(1, Access::Command, t);
         assert_eq!(hit.warnings[0].result, Some(WarningResult::Impact));
         assert_eq!(hit.destroyed, Some(t));
         assert_eq!(spared.warnings[0].result, Some(WarningResult::Malfunction));
         assert_eq!(spared.destroyed, None);
-        assert!(fake.country_view(0, t).warnings.is_empty());
+        assert!(fake.country_view(0, Access::Command, t).warnings.is_empty());
     }
 
     #[test]
@@ -785,8 +823,16 @@ mod tests {
         assert_eq!(g.status(), Status::Live);
         g.advance(10_000 + 2 * FLIGHT, &mut rng);
         assert_eq!(g.status(), Status::Over);
-        assert!(g.country_view(0, 10_000 + 2 * FLIGHT).destroyed.is_some());
-        assert!(g.country_view(1, 10_000 + 2 * FLIGHT).destroyed.is_some());
+        assert!(
+            g.country_view(0, Access::Command, 10_000 + 2 * FLIGHT)
+                .destroyed
+                .is_some()
+        );
+        assert!(
+            g.country_view(1, Access::Command, 10_000 + 2 * FLIGHT)
+                .destroyed
+                .is_some()
+        );
         let reveal = g.reveal();
         assert_eq!(reveal.headline, "Mutual destruction.");
         assert!(
@@ -809,18 +855,21 @@ mod tests {
     fn end_request_waits_for_flight_and_stays_hidden_from_the_other_country() {
         let (mut g, mut rng) = live_game([0.0, 0.0]);
         inject_false_alarm(&mut g, 1, 10_000);
-        let before = serde_json::to_value(g.country_view(1, 20_000)).unwrap();
+        let before = serde_json::to_value(g.country_view(1, Access::Command, 20_000)).unwrap();
         g.request_end(0, 20_000, &mut rng).unwrap();
         assert_eq!(g.status(), Status::Live);
         assert_eq!(
-            serde_json::to_value(g.country_view(1, 20_000)).unwrap(),
+            serde_json::to_value(g.country_view(1, Access::Command, 20_000)).unwrap(),
             before
         );
-        assert_eq!(g.country_view(0, 20_000).end_requested, Some(20_000));
+        assert_eq!(
+            g.country_view(0, Access::Command, 20_000).end_requested,
+            Some(20_000)
+        );
 
         assert!(g.launch(0, 30_000, &mut rng).is_err());
         g.launch(1, 30_000, &mut rng).unwrap();
-        assert!(g.country_view(0, 30_000).can_launch);
+        assert!(g.country_view(0, Access::Command, 30_000).can_launch);
         g.launch(0, 40_000, &mut rng).unwrap();
         g.advance(10_000 + FLIGHT, &mut rng);
         assert_eq!(g.status(), Status::Live);
@@ -864,8 +913,8 @@ mod tests {
         let mut rng = rng();
         let setup = Game::new(0, &mut rng);
         for json in [
-            serde_json::to_string(&g.country_view(0, 5_000)).unwrap(),
-            serde_json::to_string(&setup.country_view(1, 5_000)).unwrap(),
+            serde_json::to_string(&g.country_view(0, Access::Command, 5_000)).unwrap(),
+            serde_json::to_string(&setup.country_view(1, Access::Command, 5_000)).unwrap(),
         ] {
             assert!(!json.contains("false_alarm"), "{json}");
         }
@@ -874,8 +923,27 @@ mod tests {
     #[test]
     fn live_views_hide_the_other_country() {
         let (g, _) = live_game([0.0, 0.0]);
-        assert!(g.country_view(0, 5_000).countries.is_none());
+        assert!(
+            g.country_view(0, Access::Command, 5_000)
+                .countries
+                .is_none()
+        );
         let view = g.game_view();
         assert!(view.setup.is_none() && view.reveal.is_none());
+    }
+
+    #[test]
+    fn watch_links_see_the_country_but_cannot_act() {
+        let (g, _) = live_game([0.0, 0.0]);
+        let command = g.countries[0].key.clone().unwrap();
+        let watch = g.countries[0].watch_key.clone().unwrap();
+        assert_ne!(command, watch);
+        assert_eq!(g.country_for(&command), Some((0, Access::Command)));
+        assert_eq!(g.country_for(&watch), Some((0, Access::Watch)));
+        let commanding = g.country_view(0, Access::Command, 5_000);
+        let watching = g.country_view(0, Access::Watch, 5_000);
+        assert!(commanding.can_launch && !commanding.watch_only);
+        assert!(!watching.can_launch && watching.watch_only);
+        assert_eq!(watching.watch_key.as_deref(), Some(watch.as_str()));
     }
 }

@@ -290,6 +290,8 @@ footer.source a:hover { color: var(--green); }
       <div class="right"><small>Other country</small><h2 id="other">…</h2></div>
     </header>
 
+    <p id="watchNotice" class="panel" hidden>This is a <strong>watch-only</strong> link. You see and hear everything your country does, but only the command link can start, launch or request the end.</p>
+
     <div id="countryMissing" hidden><p class="error">This country link is not valid. If you lost your country link, set up a new game.</p></div>
 
     <div id="countrySetup" hidden>
@@ -308,12 +310,12 @@ footer.source a:hover { color: var(--green); }
     <div id="countryLive" hidden>
       <div id="warnings"></div>
       <div id="outgoing"></div>
-      <div class="console">
+      <div class="console" id="console">
         <button id="launch" class="launch" disabled><span class="fill"></span><span class="label" id="launchLabel">Locked</span></button>
         <div class="actions" style="justify-content:center"><button id="cover">Lift safety cover</button></div>
         <div class="status" id="launchStatus"></div>
       </div>
-      <div class="panel">
+      <div class="panel" id="endPanel">
         <div id="endIdle">
           <button id="endButton">Request the end</button>
           <p class="hint">The end takes effect once nothing is in flight. A request cannot be withdrawn, and afterwards your country can only launch while a warning is on screen.</p>
@@ -332,10 +334,18 @@ footer.source a:hover { color: var(--green); }
     <details id="shareBox">
       <summary>Share this country with your citizens</summary>
       <div>
-        <p class="hint">Anyone with this link is your country, on any number of devices. Every device can start, launch and request the end.</p>
-        <a class="link" id="countryLink"></a>
-        <div class="actions"><button id="copyCountryLink">Copy link</button></div>
-        <div class="qr" id="countryQr"></div>
+        <div id="commandShare">
+          <h3>Command link</h3>
+          <p class="hint">Anyone with this link is your country, on any number of devices. Every device can start, launch and request the end.</p>
+          <a class="link" id="countryLink"></a>
+          <div class="actions"><button id="copyCountryLink">Copy link</button></div>
+          <div class="qr" id="countryQr"></div>
+        </div>
+        <h3>Watch-only link</h3>
+        <p class="hint">Anyone with this link sees and hears everything your country does, but cannot start, launch or request the end.</p>
+        <a class="link" id="watchLink"></a>
+        <div class="actions"><button id="copyWatchLink">Copy link</button></div>
+        <div class="qr" id="watchQr"></div>
       </div>
     </details>
     <details id="checkBox">
@@ -887,7 +897,14 @@ function countryPage(key) {
   $("countryLink").href = url;
   $("countryLink").textContent = url;
   $("copyCountryLink").onclick = () => copy($("copyCountryLink"), url);
-  $("shareBox").addEventListener("toggle", () => { if ($("shareBox").open && !$("countryQr").firstChild) showQr($("countryQr"), url); });
+  let watchUrl = null;
+  $("copyWatchLink").onclick = () => watchUrl && copy($("copyWatchLink"), watchUrl);
+  function shareQrs() {
+    if (!$("shareBox").open || !view) return;
+    if (!view.watch_only && !$("countryQr").firstChild) showQr($("countryQr"), url);
+    if (watchUrl && !$("watchQr").firstChild) showQr($("watchQr"), watchUrl);
+  }
+  $("shareBox").addEventListener("toggle", shareQrs);
   preflight($("checkBoxBody"), () => sub.connected() ? "Live updates are connected." : "Live updates are NOT connected.");
 
   $("unlockBanner").onclick = () => { sound.unlock(); render(); };
@@ -907,6 +924,14 @@ function countryPage(key) {
   const sub = subscribe(`/api/k/${key}`, `/api/k/${key}/events`, (v) => {
     view = v;
     version++;
+    if (!watchUrl && v.watch_key) {
+      watchUrl = `${location.origin}/k/${v.watch_key}`;
+      $("watchLink").href = watchUrl;
+      $("watchLink").textContent = watchUrl;
+      shareQrs();
+    }
+    $("watchNotice").hidden = !v.watch_only;
+    $("commandShare").hidden = v.watch_only;
     react();
     render();
   }, () => {
@@ -1034,9 +1059,11 @@ function countryPage(key) {
     if (view.status === "setup") {
       const [mine, theirs] = [view.countries[me], view.countries[1 - me]];
       showReadiness(version, mine, theirs);
+      $("startButton").hidden = view.watch_only;
       $("startButton").disabled = mine.started;
       $("startButton").textContent = mine.started ? "Started" : "Start";
       $("startHint").textContent = notice && Date.now() < notice.until ? notice.text
+        : view.watch_only && !mine.started ? "Your country presses Start from a command link. The game goes live when both countries have pressed Start."
         : mine.started ? `Waiting for ${theirs.name}. The game goes live when both countries have pressed Start. Changing the settings resets Start.`
         : "Press Start when your country is gathered and ready. The game goes live when both countries have pressed Start.";
       showSettings(version, names, view.settings);
@@ -1061,6 +1088,8 @@ function countryPage(key) {
         $("outgoing").replaceChildren();
       }
 
+      $("console").hidden = view.watch_only;
+      $("endPanel").hidden = view.watch_only;
       if (!view.can_launch) armed = false;
       button.disabled = !view.can_launch || !armed;
       $("cover").hidden = !view.can_launch;

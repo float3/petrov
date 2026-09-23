@@ -482,6 +482,24 @@ async fn cleanup(app: Shared) {
     }
 }
 
+/// The listening socket systemd passes when a `.socket` unit starts the server.
+/// Taking it instead of binding lets the service itself run without a network.
+#[cfg(unix)]
+fn inherited_listener() -> Option<std::net::TcpListener> {
+    use std::os::fd::FromRawFd;
+    let pid: u32 = std::env::var("LISTEN_PID").ok()?.parse().ok()?;
+    if pid != std::process::id() || std::env::var("LISTEN_FDS").ok()? != "1" {
+        return None;
+    }
+    // SAFETY: systemd passes exactly one descriptor, at 3, and nothing else here owns it.
+    Some(unsafe { std::net::TcpListener::from_raw_fd(3) })
+}
+
+#[cfg(not(unix))]
+fn inherited_listener() -> Option<std::net::TcpListener> {
+    None
+}
+
 #[tokio::main]
 async fn main() {
     let addr = std::env::var("PETROV_ADDR").unwrap_or_else(|_| "127.0.0.1:8095".into());
@@ -538,9 +556,21 @@ async fn main() {
         .route("/api/k/{key}/end", post(request_end))
         .with_state(app);
 
-    let listener = tokio::net::TcpListener::bind(&addr)
-        .await
-        .unwrap_or_else(|e| panic!("cannot bind {addr}: {e}"));
-    println!("listening on http://{addr}");
+    let listener = match inherited_listener() {
+        Some(listener) => {
+            listener
+                .set_nonblocking(true)
+                .expect("cannot use the socket systemd passed");
+            tokio::net::TcpListener::from_std(listener)
+                .expect("cannot use the socket systemd passed")
+        }
+        None => tokio::net::TcpListener::bind(&addr)
+            .await
+            .unwrap_or_else(|e| panic!("cannot bind {addr}: {e}")),
+    };
+    match listener.local_addr() {
+        Ok(local) => println!("listening on http://{local}"),
+        Err(_) => println!("listening"),
+    }
     axum::serve(listener, router).await.expect("server error");
 }

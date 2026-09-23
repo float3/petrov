@@ -68,11 +68,23 @@
       };
 
       config = {
+        # systemd holds the port and passes it in, so the server itself needs
+        # no network: nginx reaches it through the socket, and it cannot reach
+        # anything, not even the other services listening on loopback.
+        systemd.sockets =
+          lib.mapAttrs (name: site: {
+            description = "${site.brand} ritual server socket (${name})";
+            wantedBy = ["sockets.target"];
+            listenStreams = ["127.0.0.1:${toString site.port}"];
+          })
+          cfg.sites;
+
         systemd.services =
           lib.mapAttrs (name: site: {
             description = "${site.brand} ritual server (${name})";
             wantedBy = ["multi-user.target"];
-            after = ["network.target"];
+            requires = ["${name}.socket"];
+            after = ["${name}.socket"];
             environment = {
               PETROV_ADDR = "127.0.0.1:${toString site.port}";
               PETROV_BRAND = site.brand;
@@ -84,6 +96,41 @@
               StateDirectory = name;
               Restart = "always";
               RestartSec = 1;
+
+              PrivateNetwork = true;
+              IPAddressDeny = "any";
+              # Serving the passed socket needs no new sockets of any kind.
+              RestrictAddressFamilies = "none";
+              # Only its own state directory under /var/lib; the rest is hidden.
+              TemporaryFileSystem = "/var/lib:ro";
+              InaccessiblePaths = ["-/mnt" "-/media" "-/srv"];
+              ProtectHome = true;
+              ProtectSystem = "strict";
+              PrivateTmp = true;
+              PrivateDevices = true;
+              DevicePolicy = "closed";
+              PrivateUsers = true;
+              PrivateIPC = true;
+              ProtectProc = "invisible";
+              ProcSubset = "pid";
+              ProtectClock = true;
+              ProtectHostname = true;
+              ProtectKernelLogs = true;
+              ProtectKernelModules = true;
+              ProtectKernelTunables = true;
+              ProtectControlGroups = true;
+              CapabilityBoundingSet = "";
+              NoNewPrivileges = true;
+              RestrictNamespaces = true;
+              RestrictRealtime = true;
+              RestrictSUIDSGID = true;
+              LockPersonality = true;
+              MemoryDenyWriteExecute = true;
+              RemoveIPC = true;
+              SystemCallArchitectures = "native";
+              SystemCallFilter = ["@system-service" "~@privileged @resources"];
+              SystemCallErrorNumber = "EPERM";
+              UMask = "0077";
             };
           })
           cfg.sites;

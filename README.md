@@ -32,3 +32,8 @@ services.petrov.sites = {
   };
 };
 ```
+
+Each site's port is held by a systemd socket unit and passed to the server,
+which then runs with no network of its own and a tight sandbox: an exploit
+cannot reach the internet, other services on loopback, or other state.
+Outside systemd, `PETROV_ADDR` is bound as usual.

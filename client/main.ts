@@ -1,9 +1,9 @@
 // Petrov Day, in a browser.
 //
-// Five screens, one page: the home page, the preflight check, the list of
-// groups playing, the game's setup screen, and the one that matters — a
-// country's command centre, which has to wake a room up when a warning
-// comes in and has to be trusted to still be connected when none does.
+// One page with five screens: the home page, the preflight check, the
+// list of groups playing, the game's setup screen, and a country's
+// command centre. The last one has to wake a room when a warning arrives,
+// and has to be visibly connected when none does.
 
 import {
   api,
@@ -131,9 +131,9 @@ function percent(p: number): string {
 // ------------------------------------------------------------------ sound
 //
 // A command centre has to be able to wake a room that is not looking at
-// it. Browsers will not make a sound until the page has been touched, so
-// the first touch anywhere unlocks the audio and asks to keep the screen
-// on.
+// it. Browsers will not play audio until the page has been touched, so
+// the first touch anywhere starts the audio context and requests a wake
+// lock.
 
 interface Siren {
   osc: OscillatorNode;
@@ -203,7 +203,7 @@ const sound = {
     osc.stop(ctx.currentTime + 0.3);
   },
 
-  /** The sound of being hit. */
+  /** The sound played when this country is hit. */
   boom(): void {
     const ctx = this.ctx;
     if (!ctx) return;
@@ -326,7 +326,8 @@ interface CheckHandle {
 
 /**
  * The checks a command centre runs before the ritual: that this device
- * can be heard, will stay awake, and is talking to the server.
+ * can be heard, that it will stay awake, and that it is reaching the
+ * server.
  */
 function preflight(
   container: HTMLElement,
@@ -870,7 +871,7 @@ function gamePage(key: string): void {
   );
 }
 
-/** The acknowledge button, in the middle of the card. */
+/** A row with one centred button in it. */
 function centred(child: HTMLElement): HTMLElement {
   const row = el("div", { className: "actions" }, child);
   row.style.justifyContent = "center";
@@ -979,7 +980,7 @@ function countryPage(key: string): void {
     },
   );
 
-  /** The sound of being hit, the first time it is true. */
+  /** Plays the impact sound the first time this country is destroyed. */
   function react(next: CountryView): void {
     if (seen.first) {
       seen.first = false;

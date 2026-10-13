@@ -123,9 +123,9 @@ pub struct Game {
     pub over_at: Option<u64>,
 }
 
-/// How long a game stays in the store. One that is over is kept for a
-/// month, so that a group can come back to what happened; one that never
-/// went anywhere is forgotten the next day.
+/// How long a game stays in the store. A finished game is kept for a
+/// month, so that a group can look up what happened. A game that was
+/// never played is deleted the next day.
 const KEEP_OVER: u64 = 30 * rooms::DAY_MS;
 const KEEP_IDLE: u64 = rooms::DAY_MS;
 
@@ -134,8 +134,8 @@ impl rooms::Room for Game {
         self.last_seen = now;
     }
 
-    /// A game moves on its own: missiles land, false alarms go off, the
-    /// ritual ends. This is what a watcher's tick drives.
+    /// A game changes without anyone acting: missiles land, false alarms
+    /// are raised, and the ritual ends. A watcher's tick drives that.
     fn tick(&mut self, now: u64) -> bool {
         self.advance(now, &mut rand::rng())
     }

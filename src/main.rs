@@ -1,10 +1,10 @@
 //! Multiplayer Petrov Day.
 //!
 //! Two groups, one missile each, a warning window, and false alarms that
-//! look exactly like real launches. The room machinery — the keys, the
-//! event streams, the store, the QR codes — is [`rooms`]; what is here is
-//! the ritual itself, the brands it is served under, and the list of
-//! groups playing it this year.
+//! look exactly like real launches. The keys, the event streams, the
+//! store and the QR codes are [`rooms`]. What is here is the ritual, the
+//! two brands it is served under, and the list of groups playing it this
+//! year.
 
 mod brand;
 mod game;
@@ -43,8 +43,8 @@ struct App {
     index: &'static str,
     manifest: &'static str,
     games: Arc<Rooms<Game>>,
-    /// The groups playing this year. Not rooms: one list, with a password
-    /// per entry, thrown away on the day.
+    /// The groups playing this year. These are not rooms but one list,
+    /// with a password per entry, emptied every year on the day.
     groups: Mutex<Vec<Group>>,
     groups_path: PathBuf,
 }
@@ -89,7 +89,7 @@ fn read_json<T: DeserializeOwned + Default>(path: &std::path::Path) -> T {
     }
 }
 
-/// Which game a country key belongs to, and what it is allowed to do.
+/// Which game a country key belongs to, and what it may do.
 async fn find_country(app: &App, key: &str) -> Option<(String, usize, Access)> {
     let key = key.to_string();
     app.games
@@ -100,8 +100,8 @@ async fn find_country(app: &App, key: &str) -> Option<(String, usize, Access)> {
         .await
 }
 
-/// Runs `f` against a game, after telling it the time and letting it move
-/// on. Saves afterwards.
+/// Runs `f` against a game, after telling it the time and letting it
+/// advance. Saves afterwards.
 async fn with_game<R>(app: &App, key: &str, f: impl FnOnce(&mut Game, u64) -> R) -> Option<R> {
     app.games.with(key, f).await
 }
@@ -121,9 +121,9 @@ async fn create_game(State(app): State<Shared>) -> Response {
         .games
         .create(|key| {
             let mut game = Game::new(now, &mut rand::rng());
-            // The store files a game under a key of its own; the game
-            // carries the same one so that everything that looks at a
-            // game can say where it lives.
+            // The store files a game under a key of its own. The game
+            // keeps the same key, so that anything holding a game knows
+            // where it is stored.
             game.key = key.to_string();
             game
         })
@@ -188,7 +188,7 @@ async fn country_state(State(app): State<Shared>, Path(key): Path<String>) -> Re
     }
 }
 
-/// Something one country does, which only a command link may do.
+/// An action by one country, which only a command link may take.
 async fn country_action(
     app: Shared,
     key: String,
@@ -261,7 +261,7 @@ async fn qr_code(body: Bytes) -> Response {
     }
 }
 
-/// The server's clock, which the preflight check compares its own against.
+/// The server's clock, which the preflight check compares the device's to.
 async fn time() -> Response {
     http::json(format!("{{\"now\":{}}}", now_ms()))
 }
@@ -386,8 +386,8 @@ async fn script() -> Response {
         .into_response()
 }
 
-/// The groups list is emptied every year on the day itself. The games
-/// look after themselves; see `Room for Game`.
+/// Empties the groups list every year on the day itself. The games are
+/// swept by the store; see `impl Room for Game`.
 async fn forget_old_groups(app: Shared) {
     loop {
         tokio::time::sleep(SWEEP).await;
@@ -462,7 +462,7 @@ async fn main() {
     tokio::spawn(forget_old_groups(app.clone()));
 
     // Under systemd the port is held by a socket unit and passed in, so
-    // the service itself runs with no network of its own.
+    // that the service can run with no network access of its own.
     let listener = rooms::listen(&addr).await;
     println!("{}", rooms::where_it_listens(&listener));
     axum::serve(listener, router(app))

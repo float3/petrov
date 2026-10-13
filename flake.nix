@@ -29,8 +29,8 @@
           # Cargo.lock, run
           #   nix run nixpkgs#nix-prefetch-git -- --url https://github.com/float3/rooms --rev <rev>
           # and put the hash it prints here.
-          outputHashes."rooms-0.1.0" = "sha256-BQCh2LPubxyfrdzdUlkGiNw7smu2l3ZrMmSbU0aRMzQ=";
-          outputHashes."rooms-client-0.1.0" = "sha256-BQCh2LPubxyfrdzdUlkGiNw7smu2l3ZrMmSbU0aRMzQ=";
+          outputHashes."rooms-0.1.0" = "sha256-SFHNdCjNQ6MmAX9mU6FiN1fIcsClfaDy6pL49WnIlJw=";
+          outputHashes."rooms-client-0.1.0" = "sha256-SFHNdCjNQ6MmAX9mU6FiN1fIcsClfaDy6pL49WnIlJw=";
         };
         meta.mainProgram = "petrov";
       };

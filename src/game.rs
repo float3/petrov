@@ -123,6 +123,31 @@ pub struct Game {
     pub over_at: Option<u64>,
 }
 
+/// How long a game stays in the store. One that is over is kept for a
+/// month, so that a group can come back to what happened; one that never
+/// went anywhere is forgotten the next day.
+const KEEP_OVER: u64 = 30 * rooms::DAY_MS;
+const KEEP_IDLE: u64 = rooms::DAY_MS;
+
+impl rooms::Room for Game {
+    fn seen(&mut self, now: u64) {
+        self.last_seen = now;
+    }
+
+    /// A game moves on its own: missiles land, false alarms go off, the
+    /// ritual ends. This is what a watcher's tick drives.
+    fn tick(&mut self, now: u64) -> bool {
+        self.advance(now, &mut rand::rng())
+    }
+
+    fn expired(&self, now: u64) -> bool {
+        match self.over_at {
+            Some(over) => over + KEEP_OVER <= now,
+            None => self.last_seen + KEEP_IDLE <= now,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Status {

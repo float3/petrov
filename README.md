@@ -2,13 +2,23 @@
 
 A Petrov Day ritual for two countries: one missile each, a warning window, and false alarms that look exactly like real launches.
 
+Built on [rooms](https://github.com/float3/rooms), which is where the room
+machinery lives: the keys, the event streams, the store, the QR codes, and
+the browser half underneath this page. What is here is the ritual.
+
 ## Run
 
 ```sh
-cargo run
+nix develop --command cargo run
 ```
 
 Listens on `127.0.0.1:8095` (`PETROV_ADDR`) and stores games in `games.json` (`PETROV_STATE`). Open `/`, create a game and send the game link to the other host. Each host claims their own country once and shares the resulting country link with everyone in that country. The game goes live when both countries press Start and ends when a country requests the end and nothing is in flight.
+
+The page is TypeScript in `client/`, compiled into the binary by the build
+script. `esbuild` bundles it and `tsc` checks it, both from the dev shell;
+no JavaScript is written by hand. The look stays in `static/index.html`:
+this one is a dark console with a siren on it and shares none of the
+stylesheet the other tools use.
 
 ## Brands
 

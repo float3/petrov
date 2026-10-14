@@ -2,14 +2,14 @@
 
 a web app for two groups ("countries") to hold a Petrov Day ritual. each country can
 launch one missile at the other, and detection systems occasionally raise false alarms.
-It is a solemn ritual, not a game: no score, no winner. "nothing happened" is the good
+it is a solemn ritual, not a game: no score, no winner. "nothing happened" is the good
 outcome.
 
 ## core user flow
 
 ### setup
 - anyone creates a game and gets a game link containing a random, unguessable part.
-  Many games can run at once, fully isolated from each other.
+  many games can run at once, fully isolated from each other.
 - settings, editable by anyone with the game link until the game is live. countries see
   changes live:
   - the names of the countries

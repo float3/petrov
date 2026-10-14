@@ -49,7 +49,7 @@ outcome.
   is not destroyed. false alarms may overlap with each other and with real missiles.
 - **launch:** each country has exactly **one** missile. the country has to
   coordinate themselves who is allowed to launch, what the chain of command is
-  etc. technically, the missile can only be launched after a deliberate
+  &c. technically, the missile can only be launched after a deliberate
   confirmation (e.g. hold 3 s or type "LAUNCH"). there is no recall and no
   defence. the launching country sees its outgoing missile with the countdown, alongside any
   incoming warnings.

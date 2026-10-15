@@ -456,7 +456,7 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 [[package]]
 name = "rooms"
 version = "0.1.0"
-source = "git+https://github.com/float3/rooms#afe92100076a4a23dfe0140c1332e5e0dc8ad6a6"
+source = "git+https://github.com/float3/rooms#0eb82a3a3d2d960c451b67d327d137f6252fb5f7"
 dependencies = [
  "axum",
  "qrcode",
@@ -470,7 +470,7 @@ dependencies = [
 [[package]]
 name = "rooms-client"
 version = "0.1.0"
-source = "git+https://github.com/float3/rooms#afe92100076a4a23dfe0140c1332e5e0dc8ad6a6"
+source = "git+https://github.com/float3/rooms#0eb82a3a3d2d960c451b67d327d137f6252fb5f7"
 
 [[package]]
 name = "ryu"

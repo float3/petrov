@@ -1,7 +1,13 @@
 name: CI
 
 on:
+  # Pushes to the default branch, and every pull request. Pushes to other
+  # branches are left to their pull request: checking both ran every job
+  # twice on the same commit.
   push:
+    branches:
+      - main
+      - master
   pull_request:
   workflow_dispatch:
 

@@ -12,7 +12,6 @@ mod groups;
 
 use axum::{
     Json, Router,
-    body::Bytes,
     extract::{Path, State},
     http::{StatusCode, header},
     response::{Html, IntoResponse, Response},
@@ -21,9 +20,9 @@ use axum::{
 use brand::Brand;
 use game::{Access, Game, Settings};
 use groups::{Group, GroupInput};
-use rooms::{Rooms, http, now_ms, qr};
+use rooms::{Rooms, http, now_ms, site};
 use serde::{Deserialize, de::DeserializeOwned};
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
 
 const INDEX: &str = include_str!("../static/index.html");
@@ -35,8 +34,6 @@ const ICON: &str = include_str!("../static/icon.svg");
 const APP_JS: &str = include_str!(concat!(env!("OUT_DIR"), "/app.js"));
 
 const MAX_GAMES: usize = 2000;
-/// How often to look for games nobody has opened in a day.
-const SWEEP: Duration = Duration::from_secs(5 * 60);
 
 struct App {
     brand: &'static Brand,
@@ -254,18 +251,6 @@ async fn country_events(State(app): State<Shared>, Path(key): Path<String>) -> R
     })
 }
 
-async fn qr_code(body: Bytes) -> Response {
-    match std::str::from_utf8(&body) {
-        Ok(link) => qr::response(link),
-        Err(_) => http::error(StatusCode::BAD_REQUEST, "That is not a link."),
-    }
-}
-
-/// The server's clock, which the preflight check compares the device's to.
-async fn time() -> Response {
-    http::json(format!("{{\"now\":{}}}", now_ms()))
-}
-
 async fn list_groups(State(app): State<Shared>) -> Response {
     let groups = app.groups.lock().await;
     let reset = groups::last_reset(now_ms(), app.brand.month, app.brand.day_of_month);
@@ -375,22 +360,11 @@ async fn manifest(State(app): State<Shared>) -> Response {
         .into_response()
 }
 
-async fn script() -> Response {
-    (
-        [
-            (header::CONTENT_TYPE, "text/javascript; charset=utf-8"),
-            (header::CACHE_CONTROL, "no-cache"),
-        ],
-        APP_JS,
-    )
-        .into_response()
-}
-
 /// Empties the groups list every year on the day itself. The games are
 /// swept by the store; see `impl Room for Game`.
 async fn forget_old_groups(app: Shared) {
     loop {
-        tokio::time::sleep(SWEEP).await;
+        tokio::time::sleep(rooms::SWEEP).await;
         let now = now_ms();
         let mut groups = app.groups.lock().await;
         let before = groups.len();
@@ -415,11 +389,11 @@ fn router(app: Shared) -> Router {
             "/icon.svg",
             get(|| async { ([(header::CONTENT_TYPE, "image/svg+xml")], ICON) }),
         )
-        .route("/app.js", get(script))
-        .route("/api/time", get(time))
+        .route("/app.js", get(|| async { site::script(APP_JS) }))
+        .route("/api/time", get(site::time))
         .route("/api/groups", get(list_groups).post(create_group))
         .route("/api/groups/{id}", put(update_group).delete(delete_group))
-        .route("/api/qr", post(qr_code))
+        .route("/api/qr", post(site::qr_code))
         .route("/api/games", post(create_game))
         .route("/api/g/{key}", get(game_state))
         .route("/api/g/{key}/events", get(game_events))
@@ -458,14 +432,8 @@ async fn main() {
         groups: Mutex::new(groups),
         groups_path,
     });
-    tokio::spawn(games.sweep(SWEEP));
+    tokio::spawn(games.sweep(rooms::SWEEP));
     tokio::spawn(forget_old_groups(app.clone()));
 
-    // Under systemd the port is held by a socket unit and passed in, so
-    // that the service can run with no network access of its own.
-    let listener = rooms::listen(&addr).await;
-    println!("{}", rooms::where_it_listens(&listener));
-    axum::serve(listener, router(app))
-        .await
-        .expect("server error");
+    rooms::serve(&addr, router(app)).await;
 }

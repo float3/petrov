@@ -121,7 +121,13 @@ pub struct Game {
     pub missiles: Vec<Missile>,
     pub end_requests: [Option<u64>; 2],
     pub over_at: Option<u64>,
+    /// People the shared room seated here by name, and their country.
+    #[serde(default)]
+    pub seated: Vec<(String, usize)>,
 }
+
+/// How many people the shared room can seat in one game.
+const MAX_SEATED: usize = 200;
 
 /// How long a game stays in the store. A finished game is kept for a
 /// month, so that a group can look up what happened. A game that was
@@ -255,6 +261,7 @@ impl Game {
             missiles: Vec::new(),
             end_requests: [None, None],
             over_at: None,
+            seated: Vec::new(),
         }
     }
 
@@ -401,6 +408,29 @@ impl Game {
         self.countries[country].key = Some(key.clone());
         self.countries[country].watch_key = Some(random_key(rng, KEY_LEN));
         Ok(key)
+    }
+
+    /// Seats somebody by name, which is how the shared room brings a whole
+    /// room in: each new name goes to the country with fewer people, and
+    /// everybody in a country holds its command link, so anybody there can
+    /// press the button. A name already seated gets the same link again.
+    pub fn seat(&mut self, name: &str, rng: &mut impl Rng) -> Result<String, &'static str> {
+        let country = match self.seated.iter().find(|(seated, _)| seated == name) {
+            Some(&(_, country)) => country,
+            None => {
+                if self.seated.len() >= MAX_SEATED {
+                    return Err("This game is full.");
+                }
+                let first = self.seated.iter().filter(|(_, c)| *c == 0).count();
+                let country = usize::from(self.seated.len() - first < first);
+                self.seated.push((name.to_string(), country));
+                country
+            }
+        };
+        match &self.countries[country].key {
+            Some(key) => Ok(key.clone()),
+            None => self.claim(country, rng),
+        }
     }
 
     /// Gives countries claimed before watch links existed a watch link.
@@ -970,5 +1000,27 @@ mod tests {
         assert!(commanding.can_launch && !commanding.watch_only);
         assert!(!watching.can_launch && watching.watch_only);
         assert_eq!(watching.watch_key.as_deref(), Some(watch.as_str()));
+    }
+
+    #[test]
+    fn a_room_seated_by_name_splits_between_the_two_countries() {
+        let mut rng = rng();
+        let mut g = Game::new(0, &mut rng);
+        let ada = g.seat("Ada", &mut rng).unwrap();
+        let bo = g.seat("Bo", &mut rng).unwrap();
+        let cy = g.seat("Cy", &mut rng).unwrap();
+        assert_eq!(g.country_for(&ada), Some((0, Access::Command)));
+        assert_eq!(g.country_for(&bo), Some((1, Access::Command)));
+        assert_eq!(cy, ada, "the third person joins the first country");
+        assert_eq!(
+            g.seat("Bo", &mut rng).unwrap(),
+            bo,
+            "seating twice is harmless"
+        );
+        assert_eq!(g.seated.len(), 3);
+        // A country the host already claimed keeps its link.
+        let mut h = Game::new(0, &mut rng);
+        let claimed = h.claim(0, &mut rng).unwrap();
+        assert_eq!(h.seat("Ada", &mut rng).unwrap(), claimed);
     }
 }

@@ -7,10 +7,12 @@
 
 import {
   api,
+  BASE,
   byId,
   copyTo,
   countdown,
   el,
+  here,
   memo,
   persist,
   qrInto,
@@ -19,6 +21,9 @@ import {
   timeOfDay,
   type Feed,
 } from "./rooms";
+
+/** The day's name, as the server wrote it into the page's title. */
+const DAY = document.title;
 
 /** How long the launch button has to be held. */
 const HOLD_MS = 3000;
@@ -674,7 +679,7 @@ function homePage(): void {
     button.disabled = true;
     api<{ game: string }>("POST", "/api/games")
       .then(({ game }) => {
-        location.href = `/g/${game}`;
+        location.href = here(`/g/${game}`);
       })
       .catch((e: unknown) => {
         $("createError").textContent = e instanceof Error ? e.message : String(e);
@@ -801,7 +806,7 @@ function gamePage(key: string): void {
     button.disabled = true;
     api<{ country: string }>("POST", `/api/g/${key}/claim/${c}`)
       .then(({ country }) => {
-        location.href = `/k/${country}`;
+        location.href = here(`/k/${country}`);
       })
       .catch((e: unknown) => {
         error.textContent = e instanceof Error ? e.message : String(e);
@@ -908,7 +913,7 @@ function countryPage(key: string): void {
   const seen = { first: true, destroyed: null as number | null };
   const warningCards = new Map<string, WarningCard>();
 
-  const url = `${location.origin}/k/${key}`;
+  const url = `${location.origin}${BASE}/k/${key}`;
   const link = byId<HTMLAnchorElement>("countryLink");
   link.href = url;
   link.textContent = url;
@@ -963,7 +968,7 @@ function countryPage(key: string): void {
       view = next;
       version++;
       if (!watchUrl && next.watch_key) {
-        watchUrl = `${location.origin}/k/${next.watch_key}`;
+        watchUrl = `${location.origin}${BASE}/k/${next.watch_key}`;
         const watch = byId<HTMLAnchorElement>("watchLink");
         watch.href = watchUrl;
         watch.textContent = watchUrl;
@@ -1186,7 +1191,7 @@ function countryPage(key: string): void {
     const { names, me } = view;
     $("me").textContent = names[me];
     $("other").textContent = names[1 - me];
-    document.title = `{{DAY}} · ${names[me]}`;
+    document.title = `${DAY} · ${names[me]}`;
 
     $("countrySetup").hidden = view.status !== "setup";
     $("countryLive").hidden = view.status !== "live";
@@ -1354,10 +1359,14 @@ function countryPage(key: string): void {
   setInterval(render, 200);
 }
 
-const path = location.pathname.replace(/\/+$/, "");
-const where = /^\/(g|k)\/([A-Za-z0-9]+)$/.exec(path);
-if (where && where[1] === "g") gamePage(where[2]);
-else if (where && where[1] === "k") countryPage(where[2]);
+// Under the shared room the page is served below a base, and the room
+// links to /h/ for the game and /p/ for a player, which are the same
+// screens as /g/ and /k/.
+const full = location.pathname.replace(/\/+$/, "");
+const path = BASE && full.startsWith(`${BASE}/`) ? full.slice(BASE.length) : full;
+const where = /^\/(g|k|h|p)\/([A-Za-z0-9]+)$/.exec(path);
+if (where && (where[1] === "g" || where[1] === "h")) gamePage(where[2]);
+else if (where && (where[1] === "k" || where[1] === "p")) countryPage(where[2]);
 else if (path === "/check") checkPage();
 else if (path === "/groups") groupsPage();
 else if (path === "/info") $("info").hidden = false;

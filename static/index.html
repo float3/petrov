@@ -160,6 +160,11 @@ footer.source a:hover { color: var(--green); }
   .check { grid-template-columns: 1fr; }
   .check .buttons { justify-content: flex-start; }
 }
+  /* Inside the shared room, which splits the room into countries
+     itself, the setup speaks to that instead of to two hosts. */
+  .in-room { display: none; }
+  html.embedded .in-room { display: block; }
+  html.embedded .on-own { display: none; }
 </style>
 </head>
 <body>
@@ -236,7 +241,8 @@ footer.source a:hover { color: var(--green); }
   <section id="game" hidden>
     <div class="title"><h1>{{DAY}}</h1><small id="gameStatus"></small></div>
     <div id="gameSetup" hidden>
-      <p class="hint">Send this game link to the host of the other country. Each host claims their own country below, and each country can be claimed only once. If your country is already claimed and it was not you, somebody else claimed it: set up a new game. Anyone with this game link can change the settings until the game is live.</p>
+      <p class="hint in-room">Everybody in the room has been split between the two countries, and each phone is its country's command centre. Name the countries and set the consequences below, then each country presses Start. Anybody who joins later goes to the smaller country.</p>
+      <p class="hint on-own">Send this game link to the host of the other country. Each host claims their own country below, and each country can be claimed only once. If your country is already claimed and it was not you, somebody else claimed it: set up a new game. Anyone with this game link can change the settings until the game is live.</p>
       <p class="hint">Keep the false alarms between the hosts. Countries are never told that false alarms exist or at what rate, until the reveal at the end.</p>
       <div class="row" id="claims"></div>
       <form id="settingsForm" autocomplete="off">

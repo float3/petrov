@@ -44,12 +44,14 @@ interface Settings {
   false_alarm_percent_per_minute: [number, number];
   flight_secs: number;
   expected_minutes: number;
+  /** Whether countries and the wall see the odds before the game. */
+  tell_odds: boolean;
 }
 
 interface CountrySettings {
   consequences: [string, string];
   flight_secs: number;
-  /** Only before the game. */
+  /** Only before the game, and only when the hosts tell. */
   odds: Odds | null;
 }
 
@@ -192,9 +194,13 @@ function percent(p: number): string {
       : `${value.toFixed(2)}%`;
 }
 
-/** "≈ 30% chance of at least one false alarm over 120 minutes." */
+/**
+ * "≈ 30% chance of at least one false alarm if the evening lasts 120
+ * minutes; more if it runs longer." The game has no fixed end, so the
+ * line promises no fixed number.
+ */
 function oddsLine(odds: Odds, country: number): string {
-  return `≈ ${percent(odds.chances[country])} chance of at least one false alarm over ${odds.minutes} minutes.`;
+  return `≈ ${percent(odds.chances[country])} chance of at least one false alarm if the evening lasts ${odds.minutes} minutes; more if it runs longer.`;
 }
 
 /** A rate in % per minute, to three figures. */
@@ -776,6 +782,7 @@ function gamePage(key: string): void {
       settings.names[c] = field(`name${c}`).value;
       settings.consequences[c] = field(`cons${c}`).value;
     }
+    settings.tell_odds = field("tellOdds").checked;
     const flight = Math.round(Number(field("flight").value) * 60);
     if (field("flight").value !== "" && Number.isFinite(flight)) {
       settings.flight_secs = Math.max(1, flight);
@@ -802,7 +809,7 @@ function gamePage(key: string): void {
   }
 
   function fillForm(settings: Settings): void {
-    const values: Record<string, string | number> = {
+    const values: Record<string, string | number | boolean> = {
       name0: settings.names[0],
       name1: settings.names[1],
       cons0: settings.consequences[0],
@@ -811,9 +818,14 @@ function gamePage(key: string): void {
       chance1: chanceField(settings.false_alarm_percent_per_minute[1], settings.expected_minutes),
       flight: +(settings.flight_secs / 60).toFixed(3),
       duration: settings.expected_minutes,
+      tellOdds: settings.tell_odds,
     };
     for (const input of inputs) {
       if (input === document.activeElement) continue;
+      if (input instanceof HTMLInputElement && input.type === "checkbox") {
+        input.checked = values[input.id] === true;
+        continue;
+      }
       if (String(input.value) !== String(values[input.id])) {
         input.value = String(values[input.id]);
       }
@@ -823,6 +835,9 @@ function gamePage(key: string): void {
   function estimates(): void {
     const settings = view?.setup?.settings;
     if (!settings) return;
+    $("oddsHint").textContent = field("tellOdds").checked
+      ? "Both countries, and the wall view, see each country's chance of at least one false alarm over the evening before the game. Nobody is ever told when one comes: a false alarm looks exactly like a launch until its warning window ends."
+      : "Keep the false alarms between the hosts. Countries are never told that false alarms exist or at what rate, until the reveal at the end.";
     const rates = formSettings().false_alarm_percent_per_minute;
     const minutes = Number(field("duration").value) || 0;
     for (const c of [0, 1]) {

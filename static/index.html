@@ -196,6 +196,8 @@ p.note.wall-open { font-size: 13px; color: var(--muted); }
 .wall-names li { padding: 2px 0; overflow-wrap: anywhere; }
 .wall-consequence { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
 .wall-odds { font-size: .6em; margin: 0; }
+label.check { display: flex; gap: 8px; align-items: center; color: var(--fg); font-size: 15px; }
+label.check input { width: auto; margin: 0; }
 .wall-game .reveal h2 { font-size: clamp(28px, 4.5vw, 64px); margin-top: 0; }
 @media (max-width: 520px) {
   .wall-countries { grid-template-columns: 1fr; }
@@ -295,7 +297,7 @@ p.note.wall-open { font-size: 13px; color: var(--muted); }
         <p class="hint">Send this to the host of the other country. Copy it before you claim: claiming takes you to your country's page.</p>
         <div id="gameShare"></div>
       </div>
-      <p class="hint">Both countries, and the wall view, see each country's chance of at least one false alarm over the evening before the game. Nobody is ever told when one comes: a false alarm looks exactly like a launch until its warning window ends.</p>
+      <p class="hint" id="oddsHint">Keep the false alarms between the hosts. Countries are never told that false alarms exist or at what rate, until the reveal at the end.</p>
       <div class="row" id="claims"></div>
       <form id="settingsForm" autocomplete="off">
         <div class="row">
@@ -333,6 +335,8 @@ p.note.wall-open { font-size: 13px; color: var(--muted); }
             </div>
           </div>
           <p class="hint">The expected duration only turns the chances above into the steady rate the game raises false alarms at. Changing it keeps each chance and changes the rate. The game has no fixed end: it ends when a country requests the end and nothing is in flight.</p>
+          <label class="check" for="tellOdds"><input id="tellOdds" type="checkbox"> Tell countries the odds</label>
+          <p class="hint">Off by default. When on, both countries and the wall view see each country's chance of at least one false alarm before the game.</p>
         </fieldset>
         <p id="saveStatus" class="hint"></p>
       </form>

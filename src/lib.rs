@@ -176,6 +176,27 @@ async fn update_settings(
     }
 }
 
+/// Who the host moves: their `id` from the game view's people.
+#[derive(Deserialize)]
+struct Moving {
+    id: u32,
+}
+
+/// `POST /api/g/<game>/move` with `{id}`: the host moves that person to
+/// the other country, before the game only. Answers 204: the game's own
+/// stream brings the new list.
+async fn move_player(
+    State(app): State<Shared>,
+    Path(key): Path<String>,
+    Json(moving): Json<Moving>,
+) -> Response {
+    match with_game(&app, &key, |game, _| game.move_player(moving.id)).await {
+        None => no_such_game(),
+        Some(Err(message)) => http::refused(message),
+        Some(Ok(_)) => StatusCode::NO_CONTENT.into_response(),
+    }
+}
+
 async fn claim(State(app): State<Shared>, Path((key, country)): Path<(String, usize)>) -> Response {
     if country > 1 {
         return no_such_game();
@@ -459,6 +480,7 @@ pub fn router_under(petrov: Petrov, base: &str) -> Router {
         .route("/api/g/{key}/events", get(game_events))
         .route("/api/g/{key}/settings", put(update_settings))
         .route("/api/g/{key}/claim/{country}", post(claim))
+        .route("/api/g/{key}/move", post(move_player))
         // Joining, the host taking somebody out, and the wall.
         .merge(lobby::routes(app.games.clone()))
         .route("/api/k/{key}", get(country_state))
@@ -779,6 +801,82 @@ mod tests {
         let (status, body) = send(&app, "POST", &at, serde_json::json!({ "name": "Ada" })).await;
         assert_eq!(status, StatusCode::OK, "her name is free again: {body}");
         assert_ne!(json(&body)["player"], ada.as_str());
+        for path in paths {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    #[tokio::test]
+    async fn the_host_moves_somebody_to_the_other_country_until_the_game_is_live() {
+        let (app, game, join, wall, paths) = opened("move").await;
+        let at = format!("/api/j/{join}");
+        let mut keys = Vec::new();
+        for name in ["Ada", "Bo"] {
+            let (_, body) = send(&app, "POST", &at, serde_json::json!({ "name": name })).await;
+            keys.push(json(&body)["player"].as_str().unwrap().to_string());
+        }
+        let (_, body) = page(&app, &format!("/api/g/{game}")).await;
+        let ada = json(&body)["view"]["people"][0].clone();
+        assert_eq!(
+            (ada["name"].as_str(), ada["seat"].as_u64()),
+            (Some("Ada"), Some(0))
+        );
+
+        let moving = format!("/api/g/{game}/move");
+        let (status, body) = send(
+            &app,
+            "POST",
+            &moving,
+            serde_json::json!({ "id": ada["id"] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+        let (_, body) = page(&app, &format!("/api/g/{game}")).await;
+        assert_eq!(json(&body)["view"]["people"][0]["seat"], 1);
+        let (_, body) = page(&app, &format!("/api/k/{}", keys[0])).await;
+        assert_eq!(json(&body)["view"]["me"], 1, "her key commands B now");
+        let (_, body) = page(&app, &format!("/api/w/{wall}")).await;
+        let countries = &json(&body)["view"]["game"]["countries"];
+        assert_eq!(countries[0]["people"], serde_json::json!([]), "{body}");
+        assert_eq!(countries[1]["people"], serde_json::json!(["Ada", "Bo"]));
+
+        // Back to A, then both countries press Start and the game is live.
+        let (status, _) = send(
+            &app,
+            "POST",
+            &moving,
+            serde_json::json!({ "id": ada["id"] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT);
+        for key in &keys {
+            let start = format!("/api/k/{key}/start");
+            let (status, body) = send(&app, "POST", &start, serde_json::json!({})).await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+        }
+        let (_, body) = page(&app, &format!("/api/g/{game}")).await;
+        assert_eq!(json(&body)["view"]["status"], "live");
+        let (_, before) = page(&app, &format!("/api/w/{wall}")).await;
+        let (status, body) = send(
+            &app,
+            "POST",
+            &moving,
+            serde_json::json!({ "id": ada["id"] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT, "{body}");
+        let (_, body) = page(&app, &format!("/api/k/{}", keys[0])).await;
+        assert_eq!(json(&body)["view"]["me"], 0, "she stays in A");
+        let (_, after) = page(&app, &format!("/api/w/{wall}")).await;
+        assert_eq!(json(&after)["view"]["game"], json(&before)["view"]["game"]);
+        let (status, _) = send(
+            &app,
+            "POST",
+            "/api/g/nope/move",
+            serde_json::json!({ "id": 0 }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
         for path in paths {
             let _ = std::fs::remove_file(path);
         }

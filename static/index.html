@@ -304,8 +304,8 @@ p.note.wall-open { font-size: 13px; color: var(--muted); }
             <input id="name0" data-field="name" data-country="0">
             <label for="cons0">Consequence when hit</label>
             <textarea id="cons0" placeholder="e.g. We destroy our cake" data-field="consequence" data-country="0"></textarea>
-            <label for="rate0">False alarms (% per minute)</label>
-            <input id="rate0" type="number" min="0" step="any" data-field="rate" data-country="0">
+            <label for="chance0">Chance of at least one false alarm this evening (%)</label>
+            <input id="chance0" type="number" min="0" max="99.99" step="any" data-field="chance" data-country="0">
             <p class="hint" id="estimate0"></p>
           </fieldset>
           <fieldset>
@@ -314,8 +314,8 @@ p.note.wall-open { font-size: 13px; color: var(--muted); }
             <input id="name1" data-field="name" data-country="1">
             <label for="cons1">Consequence when hit</label>
             <textarea id="cons1" placeholder="e.g. We destroy our cake" data-field="consequence" data-country="1"></textarea>
-            <label for="rate1">False alarms (% per minute)</label>
-            <input id="rate1" type="number" min="0" step="any" data-field="rate" data-country="1">
+            <label for="chance1">Chance of at least one false alarm this evening (%)</label>
+            <input id="chance1" type="number" min="0" max="99.99" step="any" data-field="chance" data-country="1">
             <p class="hint" id="estimate1"></p>
           </fieldset>
         </div>
@@ -331,7 +331,7 @@ p.note.wall-open { font-size: 13px; color: var(--muted); }
               <input id="duration" type="number" min="0" step="any">
             </div>
           </div>
-          <p class="hint">The expected duration is only used for the false-alarm estimates. The game has no fixed end: it ends when a country requests the end and nothing is in flight.</p>
+          <p class="hint">The expected duration only turns the chances above into the steady rate the game raises false alarms at. Changing it keeps each chance and changes the rate. The game has no fixed end: it ends when a country requests the end and nothing is in flight.</p>
         </fieldset>
         <p id="saveStatus" class="hint"></p>
       </form>

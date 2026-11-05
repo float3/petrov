@@ -34,6 +34,9 @@ outcome.
   how it decides to launch stays up to its own rules, not the app.
 - both consequences are visible to both countries.
 - no accounts and no invitations. the host shares the links themselves.
+- one room can also split itself: everybody opens the join link and gives a name, and each
+  person is seated in the country with fewer people. until the game is live, the game page can
+  move anybody to the other country; once it is live, nobody can be moved.
 
 ### Pre-flight check
 - each device can run a check on its own before the game: siren audio, screen stays awake,

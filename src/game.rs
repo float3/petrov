@@ -572,6 +572,37 @@ impl Game {
             .count()
     }
 
+    /// The host moves the person with `id` to the other country, before
+    /// the game only: while it is live, moving somebody would change who
+    /// commands a country under it, and the room is told nothing then.
+    /// Their key then commands the other country. Both countries have to
+    /// press Start again, since who is in them changed, as when the
+    /// settings change. Answers the country they are in now.
+    pub fn move_player(&mut self, id: u32) -> Result<usize, &'static str> {
+        if self.status() != Status::Setup {
+            return Err("People can be moved to the other country only before the game is live.");
+        }
+        let player = self
+            .lobby
+            .players
+            .iter_mut()
+            .find(|p| p.id == id)
+            .ok_or("That person is not in the room any more.")?;
+        let to = match player.seat {
+            Some(0) => 1,
+            Some(1) => 0,
+            _ => return Err("That person is not in a country."),
+        };
+        player.seat = Some(to as u32);
+        if self.countries[to].key.is_none() {
+            self.claim(to, &mut rand::rng())?;
+        }
+        for country in &mut self.countries {
+            country.started = false;
+        }
+        Ok(to)
+    }
+
     /// Brings a game saved by an older version up to date: countries
     /// claimed before watch links existed get one, and people seated
     /// before the lobby are moved into it, keeping their country. They
@@ -1394,6 +1425,47 @@ mod tests {
         let id = g.lobby.player(&cy).unwrap().id;
         lobby::remove(&mut g, id).unwrap();
         assert_eq!(g.country_for(&cy), None);
+    }
+
+    #[test]
+    fn the_host_can_move_somebody_to_the_other_country_before_the_game() {
+        let mut rng = rng();
+        let mut g = Game::new(0, &mut rng);
+        let ada = lobby::admit(&mut g, "Ada", None, 0).unwrap();
+        assert_eq!(g.country_for(&ada), Some((0, Access::Command)));
+        assert!(g.countries[1].key.is_none(), "nobody in B yet");
+        g.start(0, 0, &mut rng).unwrap();
+        let id = g.lobby.player(&ada).unwrap().id;
+
+        assert_eq!(g.move_player(id), Ok(1));
+        assert_eq!(g.country_for(&ada), Some((1, Access::Command)));
+        assert!(g.countries[1].key.is_some(), "B is claimed for her");
+        assert!(!g.countries[0].started, "who is in A changed");
+        assert_eq!(g.wall_view().countries.unwrap()[1].people, ["Ada"]);
+        // Her key now commands B: pressing Start starts B, not A.
+        g.start(1, 1_000, &mut rng).unwrap();
+        assert!(g.countries[1].started && !g.countries[0].started);
+        assert_eq!(g.move_player(id), Ok(0), "and back");
+        assert_eq!(g.country_for(&ada), Some((0, Access::Command)));
+        assert_eq!(
+            g.move_player(id + 100),
+            Err("That person is not in the room any more.")
+        );
+    }
+
+    #[test]
+    fn nobody_is_moved_once_the_game_is_live() {
+        let (mut g, _) = live_game([0.0, 0.0]);
+        let ada = lobby::admit(&mut g, "Ada", None, 5_000).unwrap();
+        let (country, _) = g.country_for(&ada).unwrap();
+        let wall = serde_json::to_string(&g.wall_view()).unwrap();
+        let id = g.lobby.player(&ada).unwrap().id;
+        assert_eq!(
+            g.move_player(id),
+            Err("People can be moved to the other country only before the game is live.")
+        );
+        assert_eq!(g.country_for(&ada), Some((country, Access::Command)));
+        assert_eq!(serde_json::to_string(&g.wall_view()).unwrap(), wall);
     }
 
     #[test]

@@ -17,6 +17,8 @@ listens on `127.0.0.1:8095` (`PETROV_ADDR`) and stores games in `games.json` (`P
 
 to split one room instead, everybody opens the game's join link (or scans the code on the wall view, `/w/<key>`, for a projector) and gives a name: each person goes to the country with fewer people and gets a link of their own that commands it. the wall shows both countries before the game (with each country's chance of a false alarm only if the hosts turn on "Tell countries the odds"), only that the game is live while it is, and the reveal at the end.
 
+until the game is live, the game page can also move anybody to the other country.
+
 the page is TypeScript in `client/`, compiled into the binary by the build
 script. `esbuild` bundles it and `tsc` checks it, both from the dev shell,
 and no JavaScript is written by hand. the styles stay in

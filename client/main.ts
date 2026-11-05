@@ -12,6 +12,7 @@ import {
   connectedCount,
   countdown,
   el,
+  failed,
   here,
   joining,
   joinLink,
@@ -950,6 +951,43 @@ function gamePage(key: string): void {
       seat: (seat) => names[seat] ?? "",
       // Answers 204; the game's own stream brings the new list.
       remove: (person) => api("POST", `/api/h/${key}/remove`, { id: person.id }),
+    });
+    moveButtons(next);
+  }
+
+  /**
+   * Before the game, each name gets a button that moves that person to
+   * the other country. The roster redraws only when somebody or a seat
+   * changes, so the buttons are put in, or taken out once the game has
+   * begun, after each draw.
+   */
+  function moveButtons(next: GameView): void {
+    const items = Array.from($("players").children);
+    (next.people ?? []).forEach((person, i) => {
+      const item = items[i];
+      if (!item) return;
+      const there = item.querySelector<HTMLButtonElement>("button.move");
+      const to = person.seat === 0 ? 1 : person.seat === 1 ? 0 : null;
+      if (next.status !== "setup" || to === null) {
+        there?.remove();
+        return;
+      }
+      const label = `To ${next.names[to]}`;
+      if (there && there.dataset.id === String(person.id) && there.textContent === label) return;
+      there?.remove();
+      const button = el("button", { className: "remove move", type: "button", textContent: label });
+      button.dataset.id = String(person.id);
+      button.setAttribute("aria-label", `Move ${person.name} to ${next.names[to]}`);
+      button.addEventListener("click", () => {
+        button.disabled = true;
+        // Answers 204; the game's own stream brings the new list.
+        api("POST", `/api/g/${key}/move`, { id: person.id })
+          .catch(failed)
+          .finally(() => {
+            button.disabled = false;
+          });
+      });
+      item.insertBefore(button, item.querySelector("button:not(.move)"));
     });
   }
 

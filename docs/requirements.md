@@ -16,6 +16,11 @@ outcome.
   - False-alarm rate per country (default 0.02% per minute, about 1.2%/hour).
     The setup screen asks for the expected duration of the evening (used only for this
     estimate) and shows the resulting chance of at least one false alarm per country.
+  - whether to tell the countries the odds (default off). off, countries and the wall are
+    never told that false alarms exist or at what rate, until the reveal. on, before the game
+    both countries and the wall see each country's chance of at least one false alarm if the
+    evening lasts the expected duration, worded so it promises no fixed number (the game has
+    no fixed end); never the rate per minute, and nothing once the game is live.
   - missile flight time, which is also the warning window (default 5 min).
   - each country's consequence: free text describing what that country does when it is hit
     (e.g. "We destroy our cake").
@@ -111,6 +116,7 @@ outcome.
 ## edge cases
 - **intentionally low false-alarm rate:** at the default rate, a warning is usually real, so
   retaliating looks rational. that is the Petrov dilemma and is deliberate; don't "fix" it.
+  by default countries are not told the odds either; telling them is the hosts' choice.
 - **several warnings at once:** all are shown, even though (with one missile per country)
   this reveals that at least one is false.
 - **request the end, then attack:** not possible. after an end request a country may only retaliate.

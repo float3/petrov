@@ -23,6 +23,11 @@ pub struct Settings {
     pub false_alarm_percent_per_minute: [f64; 2],
     pub flight_secs: u64,
     pub expected_minutes: u64,
+    /// Whether countries and the wall see [`Odds`] before the game. Off
+    /// unless the hosts turn it on: by default countries are never told
+    /// that false alarms exist. Games saved before this setting have it off.
+    #[serde(default)]
+    pub tell_odds: bool,
 }
 
 impl Default for Settings {
@@ -33,6 +38,7 @@ impl Default for Settings {
             false_alarm_percent_per_minute: [0.02, 0.02],
             flight_secs: 300,
             expected_minutes: 60,
+            tell_odds: false,
         }
     }
 }
@@ -48,6 +54,12 @@ impl Settings {
                 .false_alarm_percent_per_minute
                 .map(|rate| 1.0 - (-(rate / 100.0) * minutes as f64).exp()),
         }
+    }
+
+    /// The odds countries and the wall are shown: only before the game,
+    /// and only when the hosts chose to tell them.
+    fn shown_odds(&self, status: Status) -> Option<Odds> {
+        (self.tell_odds && status == Status::Setup).then(|| self.odds())
     }
 
     pub fn validate(&self) -> Result<(), &'static str> {
@@ -86,15 +98,16 @@ impl Settings {
 pub struct CountrySettings {
     pub consequences: [String; 2],
     pub flight_secs: u64,
-    /// See [`Odds`]. Only before the game.
+    /// See [`Odds`]. Only before the game, and only when the hosts tell.
     pub odds: Option<Odds>,
 }
 
 /// Each country's chance of at least one false alarm over the evening the
-/// hosts expect. Everybody sees it before the game: it is what the hosts
-/// chose, and it says nothing about when an alarm will come or whether a
-/// warning is real. Never the rate per minute, and nothing once the game
-/// is live.
+/// hosts expect. By default countries are never told that false alarms
+/// exist. When the hosts turn on [`Settings::tell_odds`], everybody sees
+/// this before the game: it is what the hosts chose, and it says nothing
+/// about when an alarm will come or whether a warning is real. Never the
+/// rate per minute, and nothing once the game is live.
 #[derive(Debug, PartialEq, Serialize)]
 pub struct Odds {
     pub minutes: u64,
@@ -373,7 +386,7 @@ pub struct WallView {
     pub names: [String; 2],
     pub countries: Option<[WallCountry; 2]>,
     pub flight_secs: Option<u64>,
-    /// See [`Odds`]. Only before the game.
+    /// See [`Odds`]. Only before the game, and only when the hosts tell.
     pub odds: Option<Odds>,
     pub live_at: Option<u64>,
     pub reveal: Option<Reveal>,
@@ -721,7 +734,7 @@ impl Game {
             settings: CountrySettings {
                 consequences: self.settings.consequences.clone(),
                 flight_secs: self.settings.flight_secs,
-                odds: (status == Status::Setup).then(|| self.settings.odds()),
+                odds: self.settings.shown_odds(status),
             },
             countries,
             live_at: self.live_at,
@@ -792,7 +805,7 @@ impl Game {
             names,
             countries,
             flight_secs: (status == Status::Setup).then_some(self.settings.flight_secs),
-            odds: (status == Status::Setup).then(|| self.settings.odds()),
+            odds: self.settings.shown_odds(status),
             live_at: self.live_at.filter(|_| status == Status::Live),
             reveal: (status == Status::Over).then(|| self.reveal()),
             consequences: (status == Status::Over).then(|| self.settings.consequences.clone()),
@@ -941,6 +954,7 @@ mod tests {
             false_alarm_percent_per_minute: rates,
             flight_secs: FLIGHT / 1000,
             expected_minutes: 60,
+            tell_odds: false,
         })
         .unwrap();
         g.claim(0, &mut rng).unwrap();
@@ -1232,22 +1246,53 @@ mod tests {
     }
 
     #[test]
-    fn countries_see_the_chance_of_a_false_alarm_only_before_the_game() {
+    fn countries_are_never_told_about_false_alarm_rates() {
         let (g, _) = live_game([0.5, 0.5]);
         let mut rng = rng();
-        let mut setup = Game::new(0, &mut rng);
-        setup.settings.false_alarm_percent_per_minute = [0.02, 0.5];
+        let setup = Game::new(0, &mut rng);
         for json in [
             serde_json::to_string(&g.country_view(0, Access::Command, 5_000)).unwrap(),
             serde_json::to_string(&setup.country_view(1, Access::Command, 5_000)).unwrap(),
         ] {
+            assert!(!json.contains("false_alarm"), "{json}");
+        }
+    }
+
+    #[test]
+    fn countries_are_not_told_the_odds_unless_the_hosts_choose_to() {
+        let mut rng = rng();
+        let setup = Game::new(0, &mut rng);
+        assert!(!setup.settings.tell_odds);
+        for c in [0, 1] {
+            assert_eq!(
+                setup.country_view(c, Access::Command, 0).settings.odds,
+                None
+            );
+            assert_eq!(setup.country_view(c, Access::Watch, 0).settings.odds, None);
+        }
+        assert_eq!(setup.wall_view().odds, None);
+        for json in [
+            serde_json::to_string(&setup.country_view(0, Access::Command, 0)).unwrap(),
+            serde_json::to_string(&setup.wall_view()).unwrap(),
+        ] {
+            assert!(!json.contains("chances"), "{json}");
+        }
+    }
+
+    #[test]
+    fn countries_told_the_odds_see_them_only_before_the_game() {
+        let mut rng = rng();
+        let mut setup = Game::new(0, &mut rng);
+        let mut settings = setup.settings.clone();
+        settings.false_alarm_percent_per_minute = [0.02, 0.5];
+        settings.tell_odds = true;
+        setup.update_settings(settings).unwrap();
+        for json in [
+            serde_json::to_string(&setup.country_view(1, Access::Command, 5_000)).unwrap(),
+            serde_json::to_string(&setup.wall_view()).unwrap(),
+        ] {
             assert!(!json.contains("false_alarm"), "never the rate: {json}");
         }
-        assert_eq!(
-            g.country_view(0, Access::Command, 5_000).settings.odds,
-            None
-        );
-        assert!(g.wall_view().odds.is_none());
         let odds = setup
             .country_view(1, Access::Command, 0)
             .settings
@@ -1256,7 +1301,28 @@ mod tests {
         assert_eq!(odds.minutes, 60);
         assert!((odds.chances[0] - 0.0119).abs() < 0.0001, "{odds:?}");
         assert!((odds.chances[1] - 0.2592).abs() < 0.0001, "{odds:?}");
-        assert_eq!(setup.wall_view().odds, Some(odds));
+        assert_eq!(
+            setup.country_view(0, Access::Watch, 0).settings.odds,
+            Some(odds)
+        );
+        assert!(setup.wall_view().odds.is_some());
+
+        let (mut g, _) = live_game([0.5, 0.5]);
+        g.settings.tell_odds = true;
+        assert_eq!(g.status(), Status::Live);
+        assert_eq!(
+            g.country_view(0, Access::Command, 5_000).settings.odds,
+            None
+        );
+        assert!(g.wall_view().odds.is_none());
+    }
+
+    #[test]
+    fn games_saved_before_the_odds_setting_keep_the_odds_secret() {
+        let mut saved = serde_json::to_value(Settings::default()).unwrap();
+        saved.as_object_mut().unwrap().remove("tell_odds");
+        let settings: Settings = serde_json::from_value(saved).unwrap();
+        assert!(!settings.tell_odds);
     }
 
     #[test]

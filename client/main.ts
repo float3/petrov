@@ -49,6 +49,14 @@ interface Settings {
 interface CountrySettings {
   consequences: [string, string];
   flight_secs: number;
+  /** Only before the game. */
+  odds: Odds | null;
+}
+
+/** Each country's chance of at least one false alarm over the evening. */
+interface Odds {
+  minutes: number;
+  chances: [number, number];
 }
 
 interface WarningView {
@@ -135,6 +143,7 @@ interface PetrovWall {
   names: [string, string];
   countries: [WallCountry, WallCountry] | null;
   flight_secs: number | null;
+  odds: Odds | null;
   live_at: number | null;
   reveal: Reveal | null;
   consequences: [string, string] | null;
@@ -158,6 +167,22 @@ function falseAlarmChance(percentPerMinute: number, minutes: number): number {
   return 1 - Math.exp(-(percentPerMinute / 100) * minutes);
 }
 
+/** The rate, in % per minute, that gives `chance` (0 to 1) of at least
+ *  one false alarm over so long: the inverse of `falseAlarmChance`. */
+function falseAlarmRate(chance: number, minutes: number): number {
+  return (-100 * Math.log(1 - chance)) / minutes;
+}
+
+/** The most a host can ask for: certainty would need an endless rate. */
+const MAX_CHANCE_PERCENT = 99.99;
+
+/** A chance as the setup form shows it, in percent, to three figures.
+ *  Empty without a duration, which leaves the rate as it is. */
+function chanceField(percentPerMinute: number, minutes: number): string {
+  if (minutes <= 0) return "";
+  return String(+(falseAlarmChance(percentPerMinute, minutes) * 100).toPrecision(3));
+}
+
 function percent(p: number): string {
   const value = p * 100;
   return value >= 10
@@ -165,6 +190,16 @@ function percent(p: number): string {
     : value >= 1
       ? `${value.toFixed(1)}%`
       : `${value.toFixed(2)}%`;
+}
+
+/** "≈ 30% chance of at least one false alarm over 120 minutes." */
+function oddsLine(odds: Odds, country: number): string {
+  return `≈ ${percent(odds.chances[country])} chance of at least one false alarm over ${odds.minutes} minutes.`;
+}
+
+/** A rate in % per minute, to three figures. */
+function perMinute(rate: number): string {
+  return `${+rate.toPrecision(3)}%`;
 }
 
 // ------------------------------------------------------------------ sound
@@ -273,6 +308,7 @@ function renderSettingsSummary(
   names: [string, string],
   settings: CountrySettings,
 ): void {
+  const odds = settings.odds;
   container.replaceChildren(
     el(
       "div",
@@ -289,6 +325,16 @@ function renderSettingsSummary(
           settings.consequences[c].trim() || "(no consequence set)",
         ),
       ),
+      ...(odds
+        ? [0, 1].map((c) =>
+            el(
+              "p",
+              {},
+              el("strong", { textContent: `${names[c]}: ` }),
+              oddsLine(odds, c),
+            ),
+          )
+        : []),
     ),
   );
 }
@@ -729,10 +775,6 @@ function gamePage(key: string): void {
     for (const c of [0, 1]) {
       settings.names[c] = field(`name${c}`).value;
       settings.consequences[c] = field(`cons${c}`).value;
-      const rate = Number(field(`rate${c}`).value);
-      settings.false_alarm_percent_per_minute[c] = Number.isFinite(rate)
-        ? Math.max(0, rate)
-        : 0;
     }
     const flight = Math.round(Number(field("flight").value) * 60);
     if (field("flight").value !== "" && Number.isFinite(flight)) {
@@ -741,6 +783,20 @@ function gamePage(key: string): void {
     const duration = Math.round(Number(field("duration").value));
     if (field("duration").value !== "" && Number.isFinite(duration)) {
       settings.expected_minutes = Math.max(0, duration);
+    }
+    // Hosts set the chance over the evening; the game keeps the rate per
+    // minute that gives it. A chance still showing what the kept rate
+    // gives keeps that rate, so that rounding the chance for the form
+    // does not move it when some other setting changes.
+    const minutes = settings.expected_minutes;
+    for (const c of [0, 1]) {
+      const typed = field(`chance${c}`).value;
+      const chance = Number(typed);
+      const kept = settings.false_alarm_percent_per_minute[c];
+      if (minutes <= 0 || typed === "" || !Number.isFinite(chance)) continue;
+      if (typed === chanceField(kept, minutes)) continue;
+      const clamped = Math.min(Math.max(chance, 0), MAX_CHANCE_PERCENT);
+      settings.false_alarm_percent_per_minute[c] = falseAlarmRate(clamped / 100, minutes);
     }
     return settings;
   }
@@ -751,8 +807,8 @@ function gamePage(key: string): void {
       name1: settings.names[1],
       cons0: settings.consequences[0],
       cons1: settings.consequences[1],
-      rate0: settings.false_alarm_percent_per_minute[0],
-      rate1: settings.false_alarm_percent_per_minute[1],
+      chance0: chanceField(settings.false_alarm_percent_per_minute[0], settings.expected_minutes),
+      chance1: chanceField(settings.false_alarm_percent_per_minute[1], settings.expected_minutes),
       flight: +(settings.flight_secs / 60).toFixed(3),
       duration: settings.expected_minutes,
     };
@@ -765,13 +821,15 @@ function gamePage(key: string): void {
   }
 
   function estimates(): void {
+    const settings = view?.setup?.settings;
+    if (!settings) return;
+    const rates = formSettings().false_alarm_percent_per_minute;
     const minutes = Number(field("duration").value) || 0;
     for (const c of [0, 1]) {
-      const rate = Number(field(`rate${c}`).value) || 0;
-      const name =
-        field(`name${c}`).value.trim() || ["Country A", "Country B"][c];
       $(`estimate${c}`).textContent =
-        `≈ ${percent(falseAlarmChance(rate, minutes))} chance of at least one false alarm at ${name} over ${minutes} minutes.`;
+        minutes > 0
+          ? `Over ${minutes} minutes. The game raises false alarms at a steady ≈ ${perMinute(rates[c])} per minute, at any second.`
+          : "Set the expected duration of the evening below to set this chance.";
     }
   }
 
@@ -1435,7 +1493,7 @@ function drawWall(game: PetrovWall, slot: HTMLElement, feed: Feed): void {
       el(
         "div",
         { className: "wall-countries" },
-        ...game.countries.map((country) =>
+        ...game.countries.map((country, c) =>
           el(
             "div",
             { className: "wall-country" },
@@ -1457,6 +1515,7 @@ function drawWall(game: PetrovWall, slot: HTMLElement, feed: Feed): void {
               el("br"),
               country.consequence.trim() || "(no consequence set)",
             ),
+            ...(game.odds ? [el("p", { className: "muted wall-odds" }, oddsLine(game.odds, c))] : []),
           ),
         ),
       ),
@@ -1476,6 +1535,7 @@ function drawWall(game: PetrovWall, slot: HTMLElement, feed: Feed): void {
     renderReveal(slot, game.reveal, game.names, {
       consequences: game.consequences ?? ["", ""],
       flight_secs: 0,
+      odds: null,
     });
   } else {
     slot.replaceChildren();

@@ -38,6 +38,18 @@ impl Default for Settings {
 }
 
 impl Settings {
+    /// Each country's chance of at least one false alarm over the
+    /// expected duration, at its rate.
+    pub fn odds(&self) -> Odds {
+        let minutes = self.expected_minutes;
+        Odds {
+            minutes,
+            chances: self
+                .false_alarm_percent_per_minute
+                .map(|rate| 1.0 - (-(rate / 100.0) * minutes as f64).exp()),
+        }
+    }
+
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.names.iter().any(|n| n.chars().count() > MAX_NAME) {
             return Err("Names can have at most 1000 characters.");
@@ -74,6 +86,20 @@ impl Settings {
 pub struct CountrySettings {
     pub consequences: [String; 2],
     pub flight_secs: u64,
+    /// See [`Odds`]. Only before the game.
+    pub odds: Option<Odds>,
+}
+
+/// Each country's chance of at least one false alarm over the evening the
+/// hosts expect. Everybody sees it before the game: it is what the hosts
+/// chose, and it says nothing about when an alarm will come or whether a
+/// warning is real. Never the rate per minute, and nothing once the game
+/// is live.
+#[derive(Debug, PartialEq, Serialize)]
+pub struct Odds {
+    pub minutes: u64,
+    /// From 0 to 1, per country.
+    pub chances: [f64; 2],
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -347,6 +373,8 @@ pub struct WallView {
     pub names: [String; 2],
     pub countries: Option<[WallCountry; 2]>,
     pub flight_secs: Option<u64>,
+    /// See [`Odds`]. Only before the game.
+    pub odds: Option<Odds>,
     pub live_at: Option<u64>,
     pub reveal: Option<Reveal>,
     pub consequences: Option<[String; 2]>,
@@ -693,6 +721,7 @@ impl Game {
             settings: CountrySettings {
                 consequences: self.settings.consequences.clone(),
                 flight_secs: self.settings.flight_secs,
+                odds: (status == Status::Setup).then(|| self.settings.odds()),
             },
             countries,
             live_at: self.live_at,
@@ -763,6 +792,7 @@ impl Game {
             names,
             countries,
             flight_secs: (status == Status::Setup).then_some(self.settings.flight_secs),
+            odds: (status == Status::Setup).then(|| self.settings.odds()),
             live_at: self.live_at.filter(|_| status == Status::Live),
             reveal: (status == Status::Over).then(|| self.reveal()),
             consequences: (status == Status::Over).then(|| self.settings.consequences.clone()),
@@ -1202,16 +1232,31 @@ mod tests {
     }
 
     #[test]
-    fn countries_are_never_told_about_false_alarm_rates() {
+    fn countries_see_the_chance_of_a_false_alarm_only_before_the_game() {
         let (g, _) = live_game([0.5, 0.5]);
         let mut rng = rng();
-        let setup = Game::new(0, &mut rng);
+        let mut setup = Game::new(0, &mut rng);
+        setup.settings.false_alarm_percent_per_minute = [0.02, 0.5];
         for json in [
             serde_json::to_string(&g.country_view(0, Access::Command, 5_000)).unwrap(),
             serde_json::to_string(&setup.country_view(1, Access::Command, 5_000)).unwrap(),
         ] {
-            assert!(!json.contains("false_alarm"), "{json}");
+            assert!(!json.contains("false_alarm"), "never the rate: {json}");
         }
+        assert_eq!(
+            g.country_view(0, Access::Command, 5_000).settings.odds,
+            None
+        );
+        assert!(g.wall_view().odds.is_none());
+        let odds = setup
+            .country_view(1, Access::Command, 0)
+            .settings
+            .odds
+            .unwrap();
+        assert_eq!(odds.minutes, 60);
+        assert!((odds.chances[0] - 0.0119).abs() < 0.0001, "{odds:?}");
+        assert!((odds.chances[1] - 0.2592).abs() < 0.0001, "{odds:?}");
+        assert_eq!(setup.wall_view().odds, Some(odds));
     }
 
     #[test]

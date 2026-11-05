@@ -706,6 +706,21 @@ function gamePage(key: string): void {
   );
   const field = (id: string) => byId<HTMLInputElement>(id);
 
+  // The other host needs this link, and claiming leaves this page, so
+  // the page offers it rather than leaving it to the address bar.
+  const gameUrl = `${location.origin}${BASE}/g/${key}`;
+  const gameLink = byId<HTMLAnchorElement>("gameLink");
+  gameLink.href = gameUrl;
+  gameLink.textContent = gameUrl;
+  byId<HTMLButtonElement>("copyGameLink").onclick = () =>
+    void copyTo($("copyGameLink"), gameUrl);
+  byId<HTMLButtonElement>("gameQrToggle").onclick = () => {
+    const qr = $("gameQr");
+    if (!qr.firstChild) qrInto("gameQr", gameUrl);
+    qr.hidden = !qr.hidden;
+    $("gameQrToggle").textContent = qr.hidden ? "Show QR code" : "Hide QR code";
+  };
+
   function formSettings(): Settings {
     const settings = structuredClone(
       (view as GameView & { setup: GameSetup }).setup.settings,

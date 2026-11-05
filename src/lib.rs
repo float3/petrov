@@ -20,7 +20,11 @@ use axum::{
 use brand::Brand;
 use game::{Access, Game, Settings};
 use groups::{Group, GroupInput};
-use rooms::{Rooms, http, now_ms, site};
+use rooms::{
+    Rooms, http,
+    lobby::{self, HasLobby},
+    now_ms, site,
+};
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{path::PathBuf, sync::Arc};
 use tokio::sync::Mutex;
@@ -86,8 +90,18 @@ fn read_json<T: DeserializeOwned + Default>(path: &std::path::Path) -> T {
     }
 }
 
-/// Which game a country key belongs to, and what it may do.
+/// Which game a country key, or a person's key, belongs to, and what it
+/// may do.
 async fn find_country(app: &App, key: &str) -> Option<(String, usize, Access)> {
+    if let Some(at) = app.games.locate(key) {
+        return app
+            .games
+            .read(&at, |game, _| game.country_for(key))
+            .await
+            .flatten()
+            .map(|(country, access)| (at, country, access));
+    }
+    // A key handed out since the store last saved its index.
     let key = key.to_string();
     app.games
         .find(move |game_key, game| {
@@ -136,7 +150,7 @@ async fn create_game(State(app): State<Shared>) -> Response {
 
 async fn game_state(State(app): State<Shared>, Path(key): Path<String>) -> Response {
     match with_game(&app, &key, |game, now| {
-        http::envelope(now, &game.game_view())
+        http::envelope(now, &game.game_view(now))
     })
     .await
     {
@@ -152,7 +166,7 @@ async fn update_settings(
 ) -> Response {
     let done = with_game(&app, &key, |game, now| {
         game.update_settings(settings)
-            .map(|_changed| http::envelope(now, &game.game_view()))
+            .map(|_changed| http::envelope(now, &game.game_view(now)))
     })
     .await;
     match done {
@@ -229,8 +243,8 @@ async fn request_end(State(app): State<Shared>, Path(key): Path<String>) -> Resp
 }
 
 async fn game_events(State(app): State<Shared>, Path(key): Path<String>) -> Response {
-    rooms::one(app.games.clone(), key, |game| {
-        serde_json::to_string(&game.game_view()).ok()
+    rooms::one_at(app.games.clone(), key, |game, now| {
+        serde_json::to_string(&game.game_view(now)).ok()
     })
 }
 
@@ -238,6 +252,20 @@ async fn country_events(State(app): State<Shared>, Path(key): Path<String>) -> R
     let Some((game_key, country, access)) = find_country(&app, &key).await else {
         return no_such_game();
     };
+    let person = app
+        .games
+        .read(&game_key, |game, _| game.lobby.player(&key).is_some())
+        .await
+        .unwrap_or(false);
+    if person {
+        // A person seated by name: their stream keeps them connected, and
+        // closes when the host takes them out.
+        return lobby::player_events(app.games.clone(), key, |game, key, now| {
+            let (country, access) = game.country_for(key)?;
+            serde_json::to_string(&game.country_view(country, access, now)).ok()
+        })
+        .await;
+    }
     let games = app.games.clone();
     rooms::stream(games.clone(), move |held, now| {
         let game = held.get_mut(&game_key)?;
@@ -414,6 +442,8 @@ pub fn router_under(petrov: Petrov, base: &str) -> Router {
         .route("/info", get(index))
         .route("/g/{key}", get(index))
         .route("/k/{key}", get(index))
+        .route("/j/{key}", get(index))
+        .route("/w/{key}", get(index))
         .route("/manifest.webmanifest", get(manifest))
         .route(
             "/icon.svg",
@@ -429,6 +459,8 @@ pub fn router_under(petrov: Petrov, base: &str) -> Router {
         .route("/api/g/{key}/events", get(game_events))
         .route("/api/g/{key}/settings", put(update_settings))
         .route("/api/g/{key}/claim/{country}", post(claim))
+        // Joining, the host taking somebody out, and the wall.
+        .merge(lobby::routes(app.games.clone()))
         .route("/api/k/{key}", get(country_state))
         .route("/api/k/{key}/events", get(country_events))
         .route("/api/k/{key}/start", post(start))
@@ -460,9 +492,7 @@ pub fn load(state: impl Into<PathBuf>, groups: impl Into<PathBuf>, brand: &str) 
     tokio::spawn({
         let games = games.clone();
         async move {
-            games
-                .each(|game| game.backfill_watch_keys(&mut rand::rng()))
-                .await;
+            games.each(|game| game.backfill(&mut rand::rng())).await;
             games.sweep(rooms::SWEEP).await;
         }
     });
@@ -472,7 +502,8 @@ pub fn load(state: impl Into<PathBuf>, groups: impl Into<PathBuf>, brand: &str) 
 
 /// Petrov Day as one of the shared room's games. A game is opened as the
 /// setup screen opens one, and each person is seated by name in one of
-/// the two countries; see [`Game::seat`].
+/// the two countries, under a key of their own; see `Game`'s
+/// [`HasLobby::arrived`].
 impl rooms::tool::Tool for Petrov {
     fn id(&self) -> &'static str {
         "petrov"
@@ -502,8 +533,47 @@ impl rooms::tool::Tool for Petrov {
         name: &'a str,
     ) -> rooms::tool::Boxed<'a, Option<Result<String, &'static str>>> {
         Box::pin(async move {
-            with_game(&self.0, host, |game, _| game.seat(name, &mut rand::rng())).await
+            with_game(&self.0, host, |game, now| {
+                lobby::admit(game, name, None, now)
+            })
+            .await
         })
+    }
+
+    fn rejoin<'a>(
+        &'a self,
+        host: &'a str,
+        known: Option<&'a str>,
+        name: &'a str,
+    ) -> rooms::tool::Boxed<'a, Option<Result<String, &'static str>>> {
+        Box::pin(async move {
+            with_game(&self.0, host, |game, now| {
+                lobby::admit(game, name, known, now)
+            })
+            .await
+        })
+    }
+
+    fn leave<'a>(&'a self, host: &'a str, key: &'a str) -> rooms::tool::Boxed<'a, Option<bool>> {
+        Box::pin(async move {
+            with_game(&self.0, host, |game, _| {
+                lobby::remove_key(game, key).is_some()
+            })
+            .await
+        })
+    }
+
+    fn wall<'a>(&'a self, host: &'a str) -> rooms::tool::Boxed<'a, Option<String>> {
+        Box::pin(async move {
+            self.0
+                .games
+                .read(host, |game, _| game.lobby.wall.clone())
+                .await
+        })
+    }
+
+    fn on_wall<'a>(&'a self, host: &'a str) -> rooms::tool::Boxed<'a, Option<lobby::OnWall>> {
+        Box::pin(async move { self.0.games.look(host, |game, now| game.on_wall(now)).await })
     }
 }
 
@@ -540,10 +610,42 @@ mod tests {
         let ada = petrov.join(&host, "Ada").await.unwrap().unwrap();
         let bo = petrov.join(&host, "Bo").await.unwrap().unwrap();
         assert_ne!(ada, bo, "two people go to two countries");
-        assert_eq!(petrov.join(&host, "Ada").await, Some(Ok(ada.clone())));
+        assert!(
+            petrov.join(&host, "Ada").await.unwrap().is_err(),
+            "Ada has only just joined, so her name is taken"
+        );
+        assert_eq!(
+            petrov.rejoin(&host, Some(&ada), "Ada").await,
+            Some(Ok(ada.clone())),
+            "but the shared room, which kept her key, gets her back"
+        );
         assert_eq!(petrov.join("no-such-game", "Ada").await, None);
+        let wall = petrov.wall(&host).await.expect("a wall");
+        assert_ne!(wall, host);
+        let shows = petrov.on_wall(&host).await.expect("the game is there");
+        assert!(shows.presence && !shows.busy, "before the game: {shows:?}");
+        assert_eq!(
+            shows.people,
+            lobby::People::Hidden,
+            "named by country instead"
+        );
+        for key in [&ada, &bo] {
+            petrov
+                .0
+                .games
+                .with(&host, |game, now| {
+                    let (country, _) = game.country_for(key).unwrap();
+                    game.start(country, now, &mut rand::rng())
+                })
+                .await
+                .unwrap()
+                .unwrap();
+        }
+        let shows = petrov.on_wall(&host).await.unwrap();
+        assert!(!shows.presence && shows.busy, "while live: {shows:?}");
+        assert_eq!(petrov.on_wall("no-such-game").await, None);
 
-        let app = Router::new().nest("/petrov", router_under(petrov, "/petrov"));
+        let app = Router::new().nest("/petrov", router_under(petrov.clone(), "/petrov"));
         for link in [format!("/petrov/h/{host}"), format!("/petrov/p/{ada}")] {
             let (status, body) = page(&app, &link).await;
             assert_eq!(status, StatusCode::OK, "{link}");
@@ -555,7 +657,241 @@ mod tests {
         assert!(body.contains(r#""watch_only":false"#), "{body}");
         let (_, manifest) = page(&app, "/petrov/manifest.webmanifest").await;
         assert!(manifest.contains(r#""/petrov/icon.svg""#), "{manifest}");
+        let (status, _) = page(&app, &format!("/petrov/api/w/{wall}")).await;
+        assert_eq!(status, StatusCode::OK);
+
+        assert_eq!(petrov.leave(&host, &bo).await, Some(true));
+        assert_eq!(petrov.leave(&host, &bo).await, Some(false));
+        let (status, _) = page(&app, &format!("/petrov/api/k/{bo}")).await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "Bo was taken out");
         let _ = std::fs::remove_file(state);
         let _ = std::fs::remove_file(groups);
+    }
+
+    async fn send(
+        app: &Router,
+        method: &str,
+        uri: &str,
+        body: serde_json::Value,
+    ) -> (StatusCode, String) {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(method)
+                    .uri(uri)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(body.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let status = response.status();
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        (status, String::from_utf8_lossy(&body).into_owned())
+    }
+
+    fn json(body: &str) -> serde_json::Value {
+        serde_json::from_str(body).unwrap_or_else(|e| panic!("{e}: {body}"))
+    }
+
+    /// A game opened on its own server, and its join and wall keys.
+    async fn opened(name: &str) -> (Router, String, String, String, [PathBuf; 2]) {
+        let paths = [temp(name), temp(&format!("{name}-groups"))];
+        let app = router(load(&paths[0], &paths[1], "petrov").expect("a brand"));
+        let (status, body) = send(&app, "POST", "/api/games", serde_json::json!({})).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let game = json(&body)["game"].as_str().unwrap().to_string();
+        let (_, body) = page(&app, &format!("/api/g/{game}")).await;
+        let view = &json(&body)["view"];
+        let join = view["join"].as_str().unwrap().to_string();
+        let wall = view["wall"].as_str().unwrap().to_string();
+        (app, game, join, wall, paths)
+    }
+
+    #[tokio::test]
+    async fn a_room_joins_by_name_and_the_host_can_take_somebody_out() {
+        let (app, game, join, _, paths) = opened("join").await;
+        let at = format!("/api/j/{join}");
+        let (status, body) = send(&app, "POST", &at, serde_json::json!({ "name": "Ada" })).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let ada = json(&body)["player"].as_str().unwrap().to_string();
+
+        let (status, body) = send(&app, "POST", &at, serde_json::json!({ "name": " ada " })).await;
+        assert_eq!(
+            status,
+            StatusCode::CONFLICT,
+            "Ada's phone is connected: {body}"
+        );
+        let (status, body) = send(
+            &app,
+            "POST",
+            &at,
+            serde_json::json!({ "name": "Ada", "key": ada }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(
+            json(&body)["player"],
+            ada.as_str(),
+            "her kept key gets her back"
+        );
+
+        let (status, body) = page(&app, &format!("/api/k/{ada}")).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let view = &json(&body)["view"];
+        assert_eq!(view["me"], 0);
+        assert_eq!(view["watch_only"], false);
+        assert_ne!(
+            view["command_key"],
+            ada.as_str(),
+            "her key is not for sharing"
+        );
+        let (_, body) = page(&app, &at).await;
+        assert_eq!(json(&body)["players"], 1);
+        let (_, body) = page(&app, &format!("/api/g/{game}")).await;
+        let person = json(&body)["view"]["people"][0].clone();
+        assert_eq!(person["name"], "Ada");
+
+        let (status, body) = send(
+            &app,
+            "POST",
+            &format!("/api/h/{game}/remove"),
+            serde_json::json!({ "id": person["id"] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NO_CONTENT, "{body}");
+        assert!(body.is_empty(), "{body}");
+        let (_, body) = page(&app, &format!("/api/g/{game}")).await;
+        assert_eq!(json(&body)["view"]["people"], serde_json::json!([]));
+        for gone in [format!("/api/k/{ada}"), format!("/api/k/{ada}/events")] {
+            let (status, _) = page(&app, &gone).await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "{gone}");
+        }
+        let (status, _) = send(
+            &app,
+            "POST",
+            &format!("/api/k/{ada}/start"),
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "a removed person cannot act");
+        let (status, body) = send(&app, "POST", &at, serde_json::json!({ "name": "Ada" })).await;
+        assert_eq!(status, StatusCode::OK, "her name is free again: {body}");
+        assert_ne!(json(&body)["player"], ada.as_str());
+        for path in paths {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+
+    #[tokio::test]
+    async fn the_wall_has_its_own_key_and_tells_the_room_nothing_while_live() {
+        let (app, game, join, wall, paths) = opened("wall").await;
+        let at = format!("/api/j/{join}");
+        let mut keys = Vec::new();
+        for name in ["Ada", "Bo"] {
+            let (_, body) = send(&app, "POST", &at, serde_json::json!({ "name": name })).await;
+            keys.push(json(&body)["player"].as_str().unwrap().to_string());
+        }
+        let (ada, bo) = (&keys[0], &keys[1]);
+        let (_, body) = page(&app, &format!("/api/g/{game}")).await;
+        let bo_id = json(&body)["view"]["people"][1]["id"].clone();
+        assert_eq!(json(&body)["view"]["people"][1]["name"], "Bo");
+
+        let (status, body) = page(&app, &format!("/api/w/{wall}")).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        let view = json(&body)["view"].clone();
+        assert_eq!(view["join"], join.as_str());
+        assert!(view["people"].is_null(), "names only by country: {view}");
+        assert!(view["connected"].is_null(), "nobody's connection: {view}");
+        assert_eq!(view["busy"], false);
+        assert_eq!(
+            view["game"]["countries"][0]["people"],
+            serde_json::json!(["Ada"])
+        );
+        assert_eq!(
+            view["game"]["countries"][1]["people"],
+            serde_json::json!(["Bo"])
+        );
+
+        // Only the wall key opens the wall, and it opens nothing else.
+        for key in [&game, &join, ada] {
+            let (status, _) = page(&app, &format!("/api/w/{key}")).await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "{key}");
+        }
+        for path in [format!("/api/g/{wall}"), format!("/api/k/{wall}")] {
+            let (status, _) = page(&app, &path).await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
+        }
+        for path in [
+            format!("/api/h/{wall}/remove"),
+            format!("/api/k/{wall}/start"),
+        ] {
+            let (status, _) = send(&app, "POST", &path, serde_json::json!({ "id": 1 })).await;
+            assert_eq!(status, StatusCode::NOT_FOUND, "{path}");
+        }
+
+        for key in [ada, bo] {
+            let (status, body) = send(
+                &app,
+                "POST",
+                &format!("/api/k/{key}/start"),
+                serde_json::json!({}),
+            )
+            .await;
+            assert_eq!(status, StatusCode::OK, "{body}");
+        }
+        let live = || async {
+            let (_, body) = page(&app, &format!("/api/w/{wall}")).await;
+            json(&body)["view"].clone()
+        };
+        let quiet = live().await;
+        assert_eq!(quiet["game"]["status"], "live");
+        assert_eq!(quiet["busy"], true);
+        assert!(
+            quiet["connected"].is_null() && quiet["count"].is_null(),
+            "{quiet}"
+        );
+        assert!(quiet["game"]["countries"].is_null(), "{quiet}");
+        let (status, _) = send(
+            &app,
+            "POST",
+            &format!("/api/k/{ada}/launch"),
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        let (status, _) = send(
+            &app,
+            "POST",
+            &format!("/api/k/{bo}/end"),
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            live().await,
+            quiet,
+            "a launch and an end request leave the wall as it was"
+        );
+        let text = quiet.to_string();
+        for secret in [ada, bo, &game] {
+            assert!(!text.contains(secret.as_str()), "{text}");
+        }
+
+        let (status, body) = send(
+            &app,
+            "POST",
+            &format!("/api/h/{game}/remove"),
+            serde_json::json!({ "id": bo_id }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT, "not while live: {body}");
+        assert!(body.contains("before the game is live"), "{body}");
+        let (_, body) = page(&app, &format!("/api/g/{game}")).await;
+        assert!(json(&body)["view"]["people"].is_null(), "{body}");
+        for path in paths {
+            let _ = std::fs::remove_file(path);
+        }
     }
 }

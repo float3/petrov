@@ -1,5 +1,7 @@
 use rand::{Rng, RngExt, distr::Alphanumeric};
+use rooms::lobby::{HasLobby, Lobby, OnWall, People, Player, Present};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 pub const MAX_NAME: usize = 1000;
 pub const MAX_CONSEQUENCE: usize = 20_000;
@@ -121,13 +123,17 @@ pub struct Game {
     pub missiles: Vec<Missile>,
     pub end_requests: [Option<u64>; 2],
     pub over_at: Option<u64>,
-    /// People the shared room seated here by name, and their country.
+    /// People seated here by name, by the shared room or through the join
+    /// link on the wall. Each has a key of their own, which commands their
+    /// country, and their country is their seat in the lobby. Games saved
+    /// before the lobby get a fresh one, with fresh keys, when they load.
     #[serde(default)]
-    pub seated: Vec<(String, usize)>,
+    pub lobby: Lobby,
+    /// How games saved before the lobby kept who was seated where. Moved
+    /// into the lobby once, when the games load; see [`Game::backfill`].
+    #[serde(default, skip_serializing)]
+    seated: Vec<(String, usize)>,
 }
-
-/// How many people the shared room can seat in one game.
-const MAX_SEATED: usize = 200;
 
 /// How long a game stays in the store. A finished game is kept for a
 /// month, so that a group can look up what happened. A game that was
@@ -150,6 +156,71 @@ impl rooms::Room for Game {
         match self.over_at {
             Some(over) => over + KEEP_OVER <= now,
             None => self.last_seen + KEEP_IDLE <= now,
+        }
+    }
+
+    /// The lobby's keys, and both countries' command and watch keys, so
+    /// that a country link finds its game without a search.
+    fn keys(&self) -> Vec<&str> {
+        self.lobby
+            .keys()
+            .chain(
+                self.countries
+                    .iter()
+                    .flat_map(|c| [c.key.as_deref(), c.watch_key.as_deref()])
+                    .flatten(),
+            )
+            .collect()
+    }
+}
+
+impl HasLobby for Game {
+    fn lobby(&self) -> &Lobby {
+        &self.lobby
+    }
+
+    fn lobby_mut(&mut self) -> &mut Lobby {
+        &mut self.lobby
+    }
+
+    /// Seats somebody new in the country with fewer people, so that a
+    /// room splits in two, and claims that country if nobody has yet.
+    /// Everybody seated in a country commands it, under their own key.
+    fn arrived(&mut self, _key: &str, _now: u64) -> Result<Option<u32>, &'static str> {
+        let country = usize::from(self.seated_in(1) < self.seated_in(0));
+        if self.countries[country].key.is_none() {
+            self.claim(country, &mut rand::rng())?;
+        }
+        Ok(Some(country as u32))
+    }
+
+    /// The host may not take anybody out while the game is live: the game
+    /// link then shows nothing about either country, and taking a
+    /// country's people out from under it would be an act of war. The
+    /// shared room still can, through `Tool::leave`.
+    fn removable(&self, _player: &Player) -> Result<(), &'static str> {
+        if self.status() == Status::Live {
+            return Err("People can be taken out before the game is live or once it is over.");
+        }
+        Ok(())
+    }
+
+    fn wall_game(&self, _now: u64) -> Value {
+        serde_json::to_value(self.wall_view()).unwrap_or(Value::Null)
+    }
+
+    /// The QR code stays up for latecomers, but the room's list of people
+    /// does not: before the game, [`Game::wall_view`] names them by
+    /// country instead. Nobody's connection is shown while the game is
+    /// live, because a phone dropping out tells the room which country is
+    /// still up; the shared room's wall and host follow this too.
+    fn on_wall(&self, _now: u64) -> OnWall {
+        let status = self.status();
+        OnWall {
+            join: true,
+            people: People::Hidden,
+            presence: status != Status::Live,
+            busy: status != Status::Setup,
         }
     }
 }
@@ -218,6 +289,10 @@ pub struct CountryView {
     pub reveal: Option<Reveal>,
     pub watch_only: bool,
     pub watch_key: Option<String>,
+    /// The country's command link, to share, for a device that may
+    /// command. A person seated by name opens their own key, which is not
+    /// for sharing.
+    pub command_key: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Serialize)]
@@ -235,10 +310,46 @@ pub struct GameSetup {
 }
 
 #[derive(Debug, PartialEq, Serialize)]
-pub struct GameView {
+pub struct GameView<'a> {
     pub status: Status,
     pub setup: Option<GameSetup>,
     pub reveal: Option<Reveal>,
+    /// Who is seated, with whose phone is connected. Not while the game is
+    /// live: then the game link shows only the status.
+    pub people: Option<Vec<Present<'a>>>,
+    /// The countries' names, for the seats in `people`.
+    pub names: [String; 2],
+    /// The join link's key, for seating a room by name.
+    pub join: &'a str,
+    /// The wall's key, `/w/<key>`.
+    pub wall: &'a str,
+}
+
+/// A country as the wall shows it before the game: who is in it, so the
+/// room can split into two corners, and what it does when hit.
+#[derive(Debug, PartialEq, Serialize)]
+pub struct WallCountry {
+    pub name: String,
+    pub people: Vec<String>,
+    pub claimed: bool,
+    pub started: bool,
+    pub consequence: String,
+}
+
+/// What the projector shows. Before the game, both countries and their
+/// consequences. While it is live, only that it is live and since when:
+/// never an alarm, a launch, an end request or who is connected, because
+/// the whole room sees the wall and a country must learn nothing about
+/// the other. At the end, the reveal.
+#[derive(Debug, PartialEq, Serialize)]
+pub struct WallView {
+    pub status: Status,
+    pub names: [String; 2],
+    pub countries: Option<[WallCountry; 2]>,
+    pub flight_secs: Option<u64>,
+    pub live_at: Option<u64>,
+    pub reveal: Option<Reveal>,
+    pub consequences: Option<[String; 2]>,
 }
 
 impl Game {
@@ -261,6 +372,7 @@ impl Game {
             missiles: Vec::new(),
             end_requests: [None, None],
             over_at: None,
+            lobby: Lobby::new(),
             seated: Vec::new(),
         }
     }
@@ -410,39 +522,42 @@ impl Game {
         Ok(key)
     }
 
-    /// Seats somebody by name, which is how the shared room brings a whole
-    /// room in: each new name goes to the country with fewer people, and
-    /// everybody in a country holds its command link, so anybody there can
-    /// press the button. A name already seated gets the same link again.
-    pub fn seat(&mut self, name: &str, rng: &mut impl Rng) -> Result<String, &'static str> {
-        let country = match self.seated.iter().find(|(seated, _)| seated == name) {
-            Some(&(_, country)) => country,
-            None => {
-                if self.seated.len() >= MAX_SEATED {
-                    return Err("This game is full.");
-                }
-                let first = self.seated.iter().filter(|(_, c)| *c == 0).count();
-                let country = usize::from(self.seated.len() - first < first);
-                self.seated.push((name.to_string(), country));
-                country
-            }
-        };
-        match &self.countries[country].key {
-            Some(key) => Ok(key.clone()),
-            None => self.claim(country, rng),
-        }
+    /// How many people are seated in `country`.
+    fn seated_in(&self, country: usize) -> usize {
+        self.lobby
+            .players
+            .iter()
+            .filter(|p| p.seat == Some(country as u32))
+            .count()
     }
 
-    /// Gives countries claimed before watch links existed a watch link.
-    pub fn backfill_watch_keys(&mut self, rng: &mut impl Rng) {
+    /// Brings a game saved by an older version up to date: countries
+    /// claimed before watch links existed get one, and people seated
+    /// before the lobby are moved into it, keeping their country. They
+    /// held the country's key then, which still works; their name gets
+    /// them a key of their own.
+    pub fn backfill(&mut self, rng: &mut impl Rng) {
         for country in &mut self.countries {
             if country.key.is_some() && country.watch_key.is_none() {
                 country.watch_key = Some(random_key(rng, KEY_LEN));
             }
         }
+        for (name, country) in std::mem::take(&mut self.seated) {
+            if country < 2 {
+                self.lobby.add(&name, Some(country as u32));
+            }
+        }
     }
 
+    /// A person seated by name commands their country; so does the
+    /// country's own link, and its watch link watches.
     pub fn country_for(&self, key: &str) -> Option<(usize, Access)> {
+        if let Some(player) = self.lobby.player(key) {
+            return player
+                .seat
+                .filter(|&seat| seat < 2)
+                .map(|seat| (seat as usize, Access::Command));
+        }
         self.countries.iter().enumerate().find_map(|(i, c)| {
             if c.key.as_deref() == Some(key) {
                 Some((i, Access::Command))
@@ -596,10 +711,13 @@ impl Game {
             reveal: (status == Status::Over).then(|| self.reveal()),
             watch_only: access == Access::Watch,
             watch_key: self.countries[country].watch_key.clone(),
+            command_key: (access == Access::Command)
+                .then(|| self.countries[country].key.clone())
+                .flatten(),
         }
     }
 
-    pub fn game_view(&self) -> GameView {
+    pub fn game_view(&self, now: u64) -> GameView<'_> {
         let status = self.status();
         let names = self.names();
         let setup = (status == Status::Setup).then(|| GameSetup {
@@ -615,6 +733,39 @@ impl Game {
             status,
             setup,
             reveal: (status == Status::Over).then(|| self.reveal()),
+            people: (status != Status::Live).then(|| self.lobby.roster(now)),
+            names,
+            join: &self.lobby.join,
+            wall: &self.lobby.wall,
+        }
+    }
+
+    pub fn wall_view(&self) -> WallView {
+        let status = self.status();
+        let names = self.names();
+        let countries = (status == Status::Setup).then(|| {
+            [0, 1].map(|c| WallCountry {
+                name: names[c].clone(),
+                people: self
+                    .lobby
+                    .players
+                    .iter()
+                    .filter(|p| p.seat == Some(c as u32))
+                    .map(|p| p.name.clone())
+                    .collect(),
+                claimed: self.countries[c].key.is_some(),
+                started: self.countries[c].started,
+                consequence: self.settings.consequences[c].clone(),
+            })
+        });
+        WallView {
+            status,
+            names,
+            countries,
+            flight_secs: (status == Status::Setup).then_some(self.settings.flight_secs),
+            live_at: self.live_at.filter(|_| status == Status::Live),
+            reveal: (status == Status::Over).then(|| self.reveal()),
+            consequences: (status == Status::Over).then(|| self.settings.consequences.clone()),
         }
     }
 
@@ -705,6 +856,7 @@ impl Game {
 mod tests {
     use super::*;
     use rand::{SeedableRng, rngs::StdRng};
+    use rooms::lobby;
 
     const FLIGHT: u64 = 300_000;
 
@@ -769,7 +921,7 @@ mod tests {
         let mut g = Game::new(0, &mut rng);
         assert!(g.claim(1, &mut rng).is_ok());
         assert!(g.claim(1, &mut rng).is_err());
-        assert!(g.game_view().setup.unwrap().countries[1].claimed);
+        assert!(g.game_view(0).setup.unwrap().countries[1].claimed);
     }
 
     #[test]
@@ -983,7 +1135,7 @@ mod tests {
                 .countries
                 .is_none()
         );
-        let view = g.game_view();
+        let view = g.game_view(0);
         assert!(view.setup.is_none() && view.reveal.is_none());
     }
 
@@ -1006,21 +1158,135 @@ mod tests {
     fn a_room_seated_by_name_splits_between_the_two_countries() {
         let mut rng = rng();
         let mut g = Game::new(0, &mut rng);
-        let ada = g.seat("Ada", &mut rng).unwrap();
-        let bo = g.seat("Bo", &mut rng).unwrap();
-        let cy = g.seat("Cy", &mut rng).unwrap();
+        let ada = lobby::admit(&mut g, "Ada", None, 0).unwrap();
+        let bo = lobby::admit(&mut g, "Bo", None, 0).unwrap();
+        let cy = lobby::admit(&mut g, "Cy", None, 0).unwrap();
         assert_eq!(g.country_for(&ada), Some((0, Access::Command)));
         assert_eq!(g.country_for(&bo), Some((1, Access::Command)));
-        assert_eq!(cy, ada, "the third person joins the first country");
+        assert_eq!(g.country_for(&cy), Some((0, Access::Command)));
+        assert_ne!(cy, ada, "everybody has a key of their own");
+        assert_ne!(g.countries[0].key.as_deref(), Some(ada.as_str()));
+        assert!(g.countries.iter().all(|c| c.key.is_some()), "both claimed");
         assert_eq!(
-            g.seat("Bo", &mut rng).unwrap(),
-            bo,
-            "seating twice is harmless"
+            lobby::admit(&mut g, "bo", None, 1_000),
+            Err("That name is taken. Add an initial, or pick another."),
+            "the same name while Bo's phone is connected"
         );
-        assert_eq!(g.seated.len(), 3);
+        assert_eq!(lobby::admit(&mut g, "Bo", Some(&bo), 1_000), Ok(bo.clone()));
+        assert_eq!(g.lobby.len(), 3);
+        // A person's view hands them the country's own link to share.
+        let view = g.country_view(1, Access::Command, 0);
+        assert_eq!(view.command_key, g.countries[1].key);
+        assert_eq!(g.country_view(1, Access::Watch, 0).command_key, None);
+        // Every key a link can carry finds the game without a search.
+        let keys = rooms::Room::keys(&g);
+        for key in [&ada, &bo, &g.lobby.join, &g.lobby.wall] {
+            assert!(keys.contains(&key.as_str()));
+        }
+        for c in &g.countries {
+            assert!(keys.contains(&c.key.as_deref().unwrap()));
+            assert!(keys.contains(&c.watch_key.as_deref().unwrap()));
+        }
         // A country the host already claimed keeps its link.
         let mut h = Game::new(0, &mut rng);
         let claimed = h.claim(0, &mut rng).unwrap();
-        assert_eq!(h.seat("Ada", &mut rng).unwrap(), claimed);
+        lobby::admit(&mut h, "Ada", None, 0).unwrap();
+        assert_eq!(h.countries[0].key.as_deref(), Some(claimed.as_str()));
+        // Somebody taken out no longer commands anything.
+        let id = g.lobby.player(&cy).unwrap().id;
+        lobby::remove(&mut g, id).unwrap();
+        assert_eq!(g.country_for(&cy), None);
+    }
+
+    #[test]
+    fn games_saved_before_the_lobby_load_and_keep_their_seats() {
+        let mut rng = rng();
+        let mut g = Game::new(0, &mut rng);
+        let country = g.claim(1, &mut rng).unwrap();
+        let mut saved = serde_json::to_value(&g).unwrap();
+        let old = saved.as_object_mut().unwrap();
+        old.remove("lobby");
+        old.insert(
+            "seated".into(),
+            serde_json::json!([["Ada", 0], ["Bo", 1], ["Cy", 0]]),
+        );
+        let mut loaded: Game = serde_json::from_value(saved).unwrap();
+        loaded.backfill(&mut rng);
+        assert_eq!(loaded.lobby.len(), 3);
+        assert_eq!(loaded.lobby.named("Bo").unwrap().seat, Some(1));
+        assert_eq!(loaded.country_for(&country), Some((1, Access::Command)));
+        // Back by name, since nobody holds the new key yet.
+        let bo = lobby::admit(&mut loaded, "Bo", None, 10_000).unwrap();
+        assert_eq!(loaded.country_for(&bo), Some((1, Access::Command)));
+        let again = serde_json::to_string(&loaded).unwrap();
+        assert!(!again.contains("seated"), "{again}");
+    }
+
+    #[test]
+    fn the_game_link_does_not_show_who_is_connected_while_live() {
+        let (mut g, _) = live_game([0.0, 0.0]);
+        lobby::admit(&mut g, "Ada", None, 5_000).unwrap();
+        assert!(g.game_view(5_000).people.is_none());
+        let mut rng = rng();
+        let mut setup = Game::new(0, &mut rng);
+        lobby::admit(&mut setup, "Ada", None, 0).unwrap();
+        let people = setup.game_view(0).people.unwrap();
+        assert_eq!(people[0].name, "Ada");
+        assert_eq!(people[0].seat, Some(0));
+    }
+
+    #[test]
+    fn the_wall_shows_nothing_of_what_happens_until_the_reveal() {
+        let (mut g, mut rng) = live_game([0.0, 0.0]);
+        let ada = lobby::admit(&mut g, "Ada", None, 3_000).unwrap();
+        let quiet = serde_json::to_string(&g.wall_view()).unwrap();
+        assert!(quiet.contains(r#""status":"live""#), "{quiet}");
+
+        // A false alarm, a launch, an end request: the wall stays the same.
+        inject_false_alarm(&mut g, 1, 10_000);
+        g.advance(20_000, &mut rng);
+        assert_eq!(serde_json::to_string(&g.wall_view()).unwrap(), quiet);
+        g.launch(1, 30_000, &mut rng).unwrap();
+        g.request_end(0, 40_000, &mut rng).unwrap();
+        g.advance(40_000, &mut rng);
+        assert_eq!(g.status(), Status::Live);
+        assert_eq!(serde_json::to_string(&g.wall_view()).unwrap(), quiet);
+
+        // Nothing a link or a setting could be read from, at any stage.
+        let mut setup = Game::new(0, &mut rng);
+        setup.settings.false_alarm_percent_per_minute = [0.37, 0.41];
+        lobby::admit(&mut setup, "Ada", None, 0).unwrap();
+        lobby::admit(&mut setup, "Bo", None, 0).unwrap();
+        for game in [&g, &setup] {
+            let wall = serde_json::to_string(&game.wall_view()).unwrap();
+            assert!(
+                !wall.contains("false_alarm") && !wall.contains("0.37"),
+                "{wall}"
+            );
+            let mut secrets: Vec<&str> = vec![&game.key, &game.lobby.join, &game.lobby.wall];
+            secrets.extend(game.lobby.players.iter().map(|p| p.key.as_str()));
+            for c in &game.countries {
+                secrets.extend(c.key.as_deref());
+                secrets.extend(c.watch_key.as_deref());
+            }
+            for secret in secrets {
+                assert!(!wall.contains(secret), "{wall} carries {secret}");
+            }
+        }
+        let before = setup.wall_view();
+        let countries = before.countries.as_ref().unwrap();
+        assert_eq!(countries[0].people, ["Ada"]);
+        assert_eq!(countries[1].people, ["Bo"]);
+        assert!(before.reveal.is_none() && before.live_at.is_none());
+
+        // The reveal names countries, never a person.
+        g.advance(30_000 + FLIGHT, &mut rng);
+        assert_eq!(g.status(), Status::Over);
+        let after = serde_json::to_string(&g.wall_view()).unwrap();
+        assert!(
+            after.contains("B retaliated against a false alarm and destroyed A."),
+            "{after}"
+        );
+        assert!(!after.contains("Ada") && !after.contains(&ada), "{after}");
     }
 }

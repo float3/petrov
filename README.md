@@ -15,6 +15,8 @@ nix develop --command cargo run
 
 listens on `127.0.0.1:8095` (`PETROV_ADDR`) and stores games in `games.json` (`PETROV_STATE`). open `/`, create a game and send the game link to the other host. each host claims their own country once and shares the resulting country link with everyone in that country. the game goes live when both countries press Start and ends when a country requests the end and nothing is in flight.
 
+to split one room instead, everybody opens the game's join link (or scans the code on the wall view, `/w/<key>`, for a projector) and gives a name: each person goes to the country with fewer people and gets a link of their own that commands it. the wall shows both countries before the game, only that the game is live while it is, and the reveal at the end.
+
 the page is TypeScript in `client/`, compiled into the binary by the build
 script. `esbuild` bundles it and `tsc` checks it, both from the dev shell,
 and no JavaScript is written by hand. the styles stay in

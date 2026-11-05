@@ -21,6 +21,14 @@
   --red: #e5383b;
   --red-deep: #8a0f16;
   --amber: #f4b942;
+  /* What rooms-client's lobby pieces are coloured from. */
+  --border: var(--line);
+  --body: var(--muted);
+  --mark: var(--green);
+  --bad: var(--red);
+  --ink: #3a0509;
+  --on-ink: #fff;
+  --shadow: rgba(0, 0, 0, .5);
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
@@ -63,7 +71,8 @@ legend { padding: 0 6px; color: var(--green); }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; margin: 16px 0; }
 .link { word-break: break-all; color: var(--green); display: block; margin: 6px 0 10px; font-size: 14px; }
 .qr { background: #fff; padding: 12px; border-radius: 8px; width: fit-content; margin: 8px 0; }
-.qr svg { display: block; width: 220px; height: 220px; }
+/* Low specificity, so the lobby's own sizes for its codes win. */
+:where(.qr) svg { display: block; width: 220px; height: auto; }
 .title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
 .title h1 { font-size: 22px; }
 .status-line { font-size: 22px; margin: 32px 0; text-align: center; }
@@ -165,6 +174,31 @@ footer.source a:hover { color: var(--green); }
   .in-room { display: none; }
   html.embedded .in-room { display: block; }
   html.embedded .on-own { display: none; }
+
+/* The lobby's pieces from rooms-client bring their own styles, coloured
+   from these. Only what this page's look adds is here. */
+a.button {
+  display: inline-block; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
+  padding: 12px 16px; color: var(--text); text-decoration: none;
+}
+a.button:hover { border-color: var(--muted); }
+p.note.wall-open { font-size: 13px; color: var(--muted); }
+.eyebrow { color: var(--muted); text-transform: uppercase; letter-spacing: .12em; margin: 0; }
+
+/* The wall: a projector across a room, so everything is large. */
+.wall-screen footer.source { display: none; }
+.wall-game small { font-size: .6em; }
+.wall-status { font-size: clamp(28px, 4.5vw, 64px); font-weight: 700; margin: 0 0 16px; }
+.wall-clock { font-size: clamp(56px, 10vw, 160px); font-variant-numeric: tabular-nums; line-height: 1; margin: 8px 0; }
+.wall-countries { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+.wall-country { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; min-width: 0; }
+.wall-country h2 { font-size: clamp(24px, 3.4vw, 48px); margin: 0; overflow-wrap: anywhere; }
+.wall-names li { padding: 2px 0; overflow-wrap: anywhere; }
+.wall-consequence { white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
+.wall-game .reveal h2 { font-size: clamp(28px, 4.5vw, 64px); margin-top: 0; }
+@media (max-width: 520px) {
+  .wall-countries { grid-template-columns: 1fr; }
+}
 </style>
 </head>
 <body>
@@ -174,6 +208,18 @@ footer.source a:hover { color: var(--green); }
     <button id="unlockBanner" class="banner unlock" hidden>Tap here to enable the siren on this device</button>
     <div id="backgroundBanner" class="banner background" hidden></div>
   </div>
+  <p id="error" class="error" role="alert" hidden></p>
+
+  <section id="screen-join" hidden>
+    <div class="title"><h1>{{DAY}}</h1><small>join a country</small></div>
+    <p class="muted">Give your name. You are seated in the country with fewer people, and this phone becomes one of its command centres.</p>
+    <form id="name-form" autocomplete="off">
+      <label for="name">Your name</label>
+      <input id="name" maxlength="32" required>
+      <div class="actions"><button class="primary" type="submit">Join</button></div>
+    </form>
+    <p id="join-count" class="hint"></p>
+  </section>
 
   <section id="home" hidden>
     <div class="title"><h1>{{DAY}}</h1><small>a ritual for two countries</small></div>
@@ -246,9 +292,7 @@ footer.source a:hover { color: var(--green); }
       <div class="panel on-own">
         <h3>Game link</h3>
         <p class="hint">Send this to the host of the other country. Copy it before you claim: claiming takes you to your country's page.</p>
-        <a class="link" id="gameLink"></a>
-        <div class="actions"><button id="copyGameLink" type="button">Copy link</button><button id="gameQrToggle" type="button">Show QR code</button></div>
-        <div class="qr" id="gameQr" hidden></div>
+        <div id="gameShare"></div>
       </div>
       <p class="hint">Keep the false alarms between the hosts. Countries are never told that false alarms exist or at what rate, until the reveal at the end.</p>
       <div class="row" id="claims"></div>
@@ -294,6 +338,16 @@ footer.source a:hover { color: var(--green); }
     </div>
     <div id="gameLive" hidden><p class="status-line">The game is live.</p></div>
     <div id="gameReveal" hidden></div>
+    <div class="panel" id="people" hidden>
+      <h3>People</h3>
+      <div class="on-own">
+        <p class="hint">To split one room between the two countries instead, everybody opens this join link, or scans the code on the wall view, and gives their name. Each person goes to the country with fewer people, and their phone commands it.</p>
+        <div id="joinShare"></div>
+      </div>
+      <p class="hint" id="peopleCount"></p>
+      <ul id="players"></ul>
+    </div>
+    <div id="wall-button"></div>
     <p id="gameMissing" class="error" hidden>This game link is not valid. The game may have been deleted.</p>
   </section>
 
@@ -305,7 +359,7 @@ footer.source a:hover { color: var(--green); }
 
     <p id="watchNotice" class="panel" hidden>This is a <strong>watch-only</strong> link. You see and hear everything your country does, but only the command link can start, launch or request the end.</p>
 
-    <div id="countryMissing" hidden><p class="error">This country link is not valid. If you lost your country link, set up a new game.</p></div>
+    <div id="countryMissing" hidden><p class="error">This country link is not valid. The host may have taken you out of the game, or it was deleted. If you lost your country link, set up a new game.</p></div>
 
     <div id="countrySetup" hidden>
       <p class="panel">Keep at least one <strong>command center</strong> device per country open, on screen, unlocked and plugged in for the whole ritual. Run the pre-flight check below on it.</p>
@@ -350,15 +404,11 @@ footer.source a:hover { color: var(--green); }
         <div id="commandShare">
           <h3>Command link</h3>
           <p class="hint">Anyone with this link is your country, on any number of devices. Every device can start, launch and request the end.</p>
-          <a class="link" id="countryLink"></a>
-          <div class="actions"><button id="copyCountryLink">Copy link</button></div>
-          <div class="qr" id="countryQr"></div>
+          <div id="countryShare"></div>
         </div>
         <h3>Watch-only link</h3>
         <p class="hint">Anyone with this link sees and hears everything your country does, but cannot start, launch or request the end.</p>
-        <a class="link" id="watchLink"></a>
-        <div class="actions"><button id="copyWatchLink">Copy link</button></div>
-        <div class="qr" id="watchQr"></div>
+        <div id="watchShare"></div>
       </div>
     </details>
     <details id="checkBox">

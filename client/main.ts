@@ -9,17 +9,25 @@ import {
   api,
   BASE,
   byId,
-  copyTo,
+  connectedCount,
   countdown,
   el,
   here,
+  joining,
+  joinLink,
+  keepAwake,
   memo,
   persist,
-  qrInto,
+  type Present,
+  roster,
+  shareLink,
+  showConnection,
   stored,
   subscribe,
   timeOfDay,
   type Feed,
+  wall,
+  wallButton,
 } from "./rooms";
 
 /** The day's name, as the server wrote it into the page's title. */
@@ -86,6 +94,8 @@ interface CountryView {
   reveal: Reveal | null;
   watch_only: boolean;
   watch_key: string | null;
+  /** The country's command link, to share; a person's own key is not. */
+  command_key: string | null;
 }
 
 interface ClaimSlot {
@@ -104,6 +114,30 @@ interface GameView {
   status: Status;
   setup: GameSetup | null;
   reveal: Reveal | null;
+  /** Who is seated, by country. Not sent while the game is live. */
+  people: Present[] | null;
+  names: [string, string];
+  join: string;
+  wall: string;
+}
+
+interface WallCountry {
+  name: string;
+  people: string[];
+  claimed: boolean;
+  started: boolean;
+  consequence: string;
+}
+
+/** What the projector shows: see `WallView` in game.rs. */
+interface PetrovWall {
+  status: Status;
+  names: [string, string];
+  countries: [WallCountry, WallCountry] | null;
+  flight_secs: number | null;
+  live_at: number | null;
+  reveal: Reveal | null;
+  consequences: [string, string] | null;
 }
 
 interface PublicGroup {
@@ -231,28 +265,6 @@ const sound = {
 document.addEventListener("pointerdown", () => sound.unlock(), {
   capture: true,
 });
-
-let wakeLock: WakeLockSentinel | null = null;
-
-async function keepAwake(): Promise<boolean> {
-  try {
-    if (
-      "wakeLock" in navigator &&
-      document.visibilityState === "visible" &&
-      !wakeLock
-    ) {
-      wakeLock = await navigator.wakeLock.request("screen");
-      wakeLock.addEventListener("release", () => {
-        wakeLock = null;
-      });
-    }
-  } catch {
-    /* not supported, or refused; the check says so */
-  }
-  return !!wakeLock;
-}
-
-document.addEventListener("visibilitychange", () => void keepAwake());
 
 // -------------------------------------------------------------- the parts
 
@@ -708,18 +720,7 @@ function gamePage(key: string): void {
 
   // The other host needs this link, and claiming leaves this page, so
   // the page offers it rather than leaving it to the address bar.
-  const gameUrl = `${location.origin}${BASE}/g/${key}`;
-  const gameLink = byId<HTMLAnchorElement>("gameLink");
-  gameLink.href = gameUrl;
-  gameLink.textContent = gameUrl;
-  byId<HTMLButtonElement>("copyGameLink").onclick = () =>
-    void copyTo($("copyGameLink"), gameUrl);
-  byId<HTMLButtonElement>("gameQrToggle").onclick = () => {
-    const qr = $("gameQr");
-    if (!qr.firstChild) qrInto("gameQr", gameUrl);
-    qr.hidden = !qr.hidden;
-    $("gameQrToggle").textContent = qr.hidden ? "Show QR code" : "Hide QR code";
-  };
+  shareLink("gameShare", `${location.origin}${BASE}/g/${key}`);
 
   function formSettings(): Settings {
     const settings = structuredClone(
@@ -865,10 +866,25 @@ function gamePage(key: string): void {
     });
   }
 
+  function showPeople(next: GameView): void {
+    wallButton("wall-button", next.wall);
+    shareLink("joinShare", joinLink(next.join));
+    $("people").hidden = next.people === null;
+    if (next.people === null) return;
+    const names = next.names;
+    $("peopleCount").textContent = connectedCount(next.people);
+    roster("players", next.people, {
+      seat: (seat) => names[seat] ?? "",
+      // Answers 204; the game's own stream brings the new list.
+      remove: (person) => api("POST", `/api/h/${key}/remove`, { id: person.id }),
+    });
+  }
+
   const feed: Feed = subscribe<GameView>(
     `/api/g/${key}`,
     `/api/g/${key}/events`,
     (next) => {
+      showPeople(next);
       view = next;
       $("gameStatus").textContent = {
         setup: "not started",
@@ -889,6 +905,8 @@ function gamePage(key: string): void {
       $("gameMissing").hidden = false;
     },
   );
+  showConnection(feed);
+  void keepAwake();
 }
 
 /** A row with one centred button in it. */
@@ -928,24 +946,8 @@ function countryPage(key: string): void {
   const seen = { first: true, destroyed: null as number | null };
   const warningCards = new Map<string, WarningCard>();
 
-  const url = `${location.origin}${BASE}/k/${key}`;
-  const link = byId<HTMLAnchorElement>("countryLink");
-  link.href = url;
-  link.textContent = url;
-  byId<HTMLButtonElement>("copyCountryLink").onclick = () =>
-    void copyTo($("copyCountryLink"), url);
-  let watchUrl: string | null = null;
-  byId<HTMLButtonElement>("copyWatchLink").onclick = () => {
-    if (watchUrl) void copyTo($("copyWatchLink"), watchUrl);
-  };
-
-  function shareQrs(): void {
-    const box = byId<HTMLDetailsElement>("shareBox");
-    if (!box.open || !view) return;
-    if (!view.watch_only && !$("countryQr").firstChild) qrInto("countryQr", url);
-    if (watchUrl && !$("watchQr").firstChild) qrInto("watchQr", watchUrl);
-  }
-  $("shareBox").addEventListener("toggle", shareQrs);
+  const countryLink = (k: string) => `${location.origin}${BASE}/k/${k}`;
+  void keepAwake();
   preflight($("checkBoxBody"), () =>
     feed.connected()
       ? "Live updates are connected."
@@ -982,19 +984,23 @@ function countryPage(key: string): void {
     (next) => {
       view = next;
       version++;
-      if (!watchUrl && next.watch_key) {
-        watchUrl = `${location.origin}${BASE}/k/${next.watch_key}`;
-        const watch = byId<HTMLAnchorElement>("watchLink");
-        watch.href = watchUrl;
-        watch.textContent = watchUrl;
-        shareQrs();
-      }
+      // A person seated by name shares the country's link, not their own.
+      if (next.command_key) shareLink("countryShare", countryLink(next.command_key));
+      if (next.watch_key) shareLink("watchShare", countryLink(next.watch_key));
       $("watchNotice").hidden = !next.watch_only;
       $("commandShare").hidden = next.watch_only;
       react(next);
       render();
     },
     () => {
+      // A wrong link, a deleted game, or a person the host took out: the
+      // console on screen is no longer the country's, so it goes.
+      view = null;
+      sound.alarm(false);
+      document.body.classList.remove("alarm");
+      for (const id of ["countrySetup", "countryLive", "countryReveal", "hit", "watchNotice"]) {
+        $(id).hidden = true;
+      }
       $("countryMissing").hidden = false;
       $("shareBox").hidden = true;
     },
@@ -1393,14 +1399,85 @@ function countryPage(key: string): void {
   setInterval(render, 200);
 }
 
+// ------------------------------------------------------------- the wall
+//
+// The projector in the room. Before the game it splits the room into its
+// two countries; while the game is live it says only that, and for how
+// long, because everybody can see it and a country must learn nothing
+// about the other; at the end it shows the reveal.
+
+let liveSince: { at: number; feed: Feed; clock: HTMLElement } | null = null;
+setInterval(() => {
+  if (liveSince) liveSince.clock.textContent = countdown(liveSince.feed.now() - liveSince.at);
+}, 500);
+
+function drawWall(game: PetrovWall, slot: HTMLElement, feed: Feed): void {
+  liveSince = null;
+  document.title = `${DAY} · ${game.names[0]} and ${game.names[1]}`;
+  if (game.status === "setup" && game.countries) {
+    slot.replaceChildren(
+      el("p", { className: "wall-status" }, "Find your country"),
+      el(
+        "div",
+        { className: "wall-countries" },
+        ...game.countries.map((country) =>
+          el(
+            "div",
+            { className: "wall-country" },
+            el("h2", {}, country.name),
+            el(
+              "p",
+              { className: country.started ? "ok" : "muted" },
+              country.started
+                ? "Pressed Start"
+                : country.people.length === 1
+                  ? "1 person"
+                  : `${country.people.length} people`,
+            ),
+            el("ul", { className: "plain wall-names" }, ...country.people.map((name) => el("li", {}, name))),
+            el(
+              "p",
+              { className: "wall-consequence" },
+              el("small", {}, "When hit"),
+              el("br"),
+              country.consequence.trim() || "(no consequence set)",
+            ),
+          ),
+        ),
+      ),
+      ...(game.flight_secs !== null
+        ? [el("p", { className: "muted" }, `A missile takes ${countdown(game.flight_secs * 1000)} to land.`)]
+        : []),
+    );
+  } else if (game.status === "live" && game.live_at !== null) {
+    const clock = el("p", { className: "wall-clock" }, countdown(feed.now() - game.live_at));
+    liveSince = { at: game.live_at, feed, clock };
+    slot.replaceChildren(
+      el("p", { className: "wall-status" }, "Both countries are live."),
+      el("small", {}, "Live for"),
+      clock,
+    );
+  } else if (game.status === "over" && game.reveal) {
+    renderReveal(slot, game.reveal, game.names, {
+      consequences: game.consequences ?? ["", ""],
+      flight_secs: 0,
+    });
+  } else {
+    slot.replaceChildren();
+  }
+}
+
 // Under the shared room the page is served below a base, and the room
 // links to /h/ for the game and /p/ for a player, which are the same
-// screens as /g/ and /k/.
+// screens as /g/ and /k/. The join link and the wall are the lobby's.
 const full = location.pathname.replace(/\/+$/, "");
 const path = BASE && full.startsWith(`${BASE}/`) ? full.slice(BASE.length) : full;
-const where = /^\/(g|k|h|p)\/([A-Za-z0-9]+)$/.exec(path);
+const where = /^\/(g|k|h|p|j|w)\/([A-Za-z0-9]+)$/.exec(path);
 if (where && (where[1] === "g" || where[1] === "h")) gamePage(where[2]);
 else if (where && (where[1] === "k" || where[1] === "p")) countryPage(where[2]);
+else if (where && where[1] === "j")
+  joining("petrov", where[2], { check: (kept) => `/api/k/${kept}`, page: (kept) => `/k/${kept}` });
+else if (where && where[1] === "w") wall<PetrovWall>(where[2], drawWall);
 else if (path === "/check") checkPage();
 else if (path === "/groups") groupsPage();
 else if (path === "/info") $("info").hidden = false;

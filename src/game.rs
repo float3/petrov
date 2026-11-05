@@ -783,6 +783,16 @@ impl Game {
                 t: f.detected,
                 text: format!("False alarm at {}.", names[f.to]),
             });
+            if self.held_fire(f) {
+                timeline.push(TimelineEntry {
+                    t: f.ends,
+                    text: format!(
+                        "{} held its fire through a false alarm ({} on screen).",
+                        names[f.to],
+                        clock(f.ends - f.detected)
+                    ),
+                });
+            }
         }
         for m in &self.missiles {
             let (from, to) = (&names[m.from], &names[1 - m.from]);
@@ -824,12 +834,29 @@ impl Game {
         }
     }
 
+    /// Whether the country a false alarm warned could have launched while
+    /// it was on screen and did not: it still had its missile, was not
+    /// destroyed before the warning ended, and launched nothing during it.
+    /// A launch during the warning has its own line in the timeline.
+    fn held_fire(&self, alarm: &FalseAlarm) -> bool {
+        let country = alarm.to;
+        let launched_by_end = self
+            .missiles
+            .iter()
+            .any(|m| m.from == country && m.launched <= alarm.ends);
+        !launched_by_end && self.destroyed_at(country, alarm.ends).is_none()
+    }
+
     fn headline(&self) -> String {
         let names = self.names();
         let mut launches: Vec<&Missile> = self.missiles.iter().collect();
         launches.sort_by_key(|m| m.launched);
         match launches.as_slice() {
-            [] => "Peace held.".into(),
+            [] => match self.false_alarms.len() {
+                0 => "Peace held.".into(),
+                1 => "Peace held through a false alarm.".into(),
+                n => format!("Peace held through {n} false alarms."),
+            },
             [m] => {
                 let (from, to) = (&names[m.from], &names[1 - m.from]);
                 if m.warning_on_screen {
@@ -849,6 +876,17 @@ impl Game {
                 }
             }
         }
+    }
+}
+
+/// A length of time as the screens show it: `5:00`, or `1:05:00`.
+fn clock(ms: u64) -> String {
+    let secs = ms.div_ceil(1000);
+    let (h, m, s) = (secs / 3600, secs / 60 % 60, secs % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
     }
 }
 
@@ -1056,6 +1094,55 @@ mod tests {
         g.request_end(1, 60_000, &mut rng).unwrap();
         assert_eq!(g.status(), Status::Over);
         assert_eq!(g.reveal().headline, "Peace held.");
+    }
+
+    #[test]
+    fn the_reveal_says_when_a_country_held_its_fire_through_a_false_alarm() {
+        let held = "B held its fire through a false alarm (5:00 on screen).";
+        // Two false alarms, nobody launched.
+        let (mut g, mut rng) = live_game([0.0, 0.0]);
+        inject_false_alarm(&mut g, 1, 10_000);
+        inject_false_alarm(&mut g, 0, 20_000);
+        g.advance(20_000 + FLIGHT, &mut rng);
+        g.request_end(0, 20_000 + FLIGHT, &mut rng).unwrap();
+        assert_eq!(g.status(), Status::Over);
+        let reveal = g.reveal();
+        assert_eq!(reveal.headline, "Peace held through 2 false alarms.");
+        let at = |text: &str| reveal.timeline.iter().find(|e| e.text == text).map(|e| e.t);
+        assert_eq!(at(held), Some(10_000 + FLIGHT));
+        assert_eq!(
+            at("A held its fire through a false alarm (5:00 on screen)."),
+            Some(20_000 + FLIGHT)
+        );
+
+        // A launch during the warning is not holding fire, and neither
+        // is a warning to a country with no missile left.
+        let (mut g, mut rng) = live_game([0.0, 0.0]);
+        inject_false_alarm(&mut g, 1, 10_000);
+        g.launch(1, 15_000, &mut rng).unwrap();
+        inject_false_alarm(&mut g, 1, 20_000);
+        g.advance(15_000 + FLIGHT, &mut rng);
+        let reveal = g.reveal();
+        assert!(
+            reveal
+                .timeline
+                .iter()
+                .all(|e| !e.text.contains("held its fire")),
+            "{:?}",
+            reveal.timeline
+        );
+
+        // Nor is a warning that was still on screen when the country was hit.
+        let (mut g, mut rng) = live_game([0.0, 0.0]);
+        g.launch(0, 3_000, &mut rng).unwrap();
+        inject_false_alarm(&mut g, 1, 3_000 + FLIGHT - 10_000);
+        g.advance(3_000 + 2 * FLIGHT, &mut rng);
+        assert_eq!(g.status(), Status::Over);
+        let reveal = g.reveal();
+        assert_eq!(reveal.headline, "B was destroyed.");
+        assert!(reveal.timeline.iter().all(|e| e.text != held));
+        assert_eq!(clock(65 * 60_000), "1:05:00");
+        assert_eq!(clock(1), "0:01");
     }
 
     #[test]

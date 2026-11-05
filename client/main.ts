@@ -1200,6 +1200,20 @@ function countryPage(key: string): void {
   const showSettings = memo((names: [string, string], settings: CountrySettings) =>
     renderSettingsSummary($("setupSettings"), names, settings),
   );
+  // Both consequences stay on hand while live, folded away below the end
+  // panel so that nothing is added to the alarm itself.
+  const showConsequences = memo((names: [string, string], settings: CountrySettings) =>
+    $("liveConsequencesBody").replaceChildren(
+      ...[0, 1].map((c) =>
+        el(
+          "p",
+          {},
+          el("strong", { textContent: `${names[c]} when hit: ` }),
+          settings.consequences[c].trim() || "(no consequence set)",
+        ),
+      ),
+    ),
+  );
   const showLog = memo((entries: [number, string][]) =>
     $("log").replaceChildren(
       ...entries.map(([at, text]) =>
@@ -1263,6 +1277,7 @@ function countryPage(key: string): void {
     );
 
     if (view.status === "live") {
+      showConsequences(version, names, view.settings);
       const visible = view.warnings.filter(
         (w) => !w.result || now < w.ends + 60_000,
       );

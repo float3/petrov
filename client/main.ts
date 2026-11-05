@@ -1041,13 +1041,9 @@ function countryPage(key: string): void {
     if (bar) bar.style.height = "0";
   }
 
-  button.addEventListener("pointerdown", (event) => {
-    if (button.disabled) return;
-    try {
-      button.setPointerCapture(event.pointerId);
-    } catch {
-      /* some browsers refuse; the hold still works */
-    }
+  /** Starts the hold, by pointer or by key; releasing cancels it. */
+  function beginHold(): void {
+    if (button.disabled || holding) return;
     const began = performance.now();
     holding = { frame: 0 };
     const tick = () => {
@@ -1065,10 +1061,33 @@ function countryPage(key: string): void {
       }
     };
     holding.frame = requestAnimationFrame(tick);
+  }
+
+  button.addEventListener("pointerdown", (event) => {
+    if (button.disabled) return;
+    try {
+      button.setPointerCapture(event.pointerId);
+    } catch {
+      /* some browsers refuse; the hold still works */
+    }
+    beginHold();
   });
   for (const event of ["pointerup", "pointercancel", "lostpointercapture"]) {
     button.addEventListener(event, cancelHold);
   }
+  // Holding Space or Enter is the same deliberate hold, for people who
+  // cannot hold a pointer down.
+  const holdKey = (event: KeyboardEvent) =>
+    event.key === " " || event.key === "Enter";
+  button.addEventListener("keydown", (event) => {
+    if (!holdKey(event)) return;
+    event.preventDefault();
+    if (!event.repeat) beginHold();
+  });
+  button.addEventListener("keyup", (event) => {
+    if (holdKey(event)) cancelHold();
+  });
+  button.addEventListener("blur", cancelHold);
   button.addEventListener("contextmenu", (event) => event.preventDefault());
 
   byId<HTMLButtonElement>("endButton").onclick = () => {

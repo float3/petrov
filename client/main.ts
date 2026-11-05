@@ -49,6 +49,14 @@ interface Settings {
 interface CountrySettings {
   consequences: [string, string];
   flight_secs: number;
+  /** Only before the game. */
+  odds: Odds | null;
+}
+
+/** Each country's chance of at least one false alarm over the evening. */
+interface Odds {
+  minutes: number;
+  chances: [number, number];
 }
 
 interface WarningView {
@@ -135,6 +143,7 @@ interface PetrovWall {
   names: [string, string];
   countries: [WallCountry, WallCountry] | null;
   flight_secs: number | null;
+  odds: Odds | null;
   live_at: number | null;
   reveal: Reveal | null;
   consequences: [string, string] | null;
@@ -172,6 +181,20 @@ const MAX_CHANCE_PERCENT = 99.99;
 function chanceField(percentPerMinute: number, minutes: number): string {
   if (minutes <= 0) return "";
   return String(+(falseAlarmChance(percentPerMinute, minutes) * 100).toPrecision(3));
+}
+
+function percent(p: number): string {
+  const value = p * 100;
+  return value >= 10
+    ? `${value.toFixed(0)}%`
+    : value >= 1
+      ? `${value.toFixed(1)}%`
+      : `${value.toFixed(2)}%`;
+}
+
+/** "≈ 30% chance of at least one false alarm over 120 minutes." */
+function oddsLine(odds: Odds, country: number): string {
+  return `≈ ${percent(odds.chances[country])} chance of at least one false alarm over ${odds.minutes} minutes.`;
 }
 
 /** A rate in % per minute, to three figures. */
@@ -285,6 +308,7 @@ function renderSettingsSummary(
   names: [string, string],
   settings: CountrySettings,
 ): void {
+  const odds = settings.odds;
   container.replaceChildren(
     el(
       "div",
@@ -301,6 +325,16 @@ function renderSettingsSummary(
           settings.consequences[c].trim() || "(no consequence set)",
         ),
       ),
+      ...(odds
+        ? [0, 1].map((c) =>
+            el(
+              "p",
+              {},
+              el("strong", { textContent: `${names[c]}: ` }),
+              oddsLine(odds, c),
+            ),
+          )
+        : []),
     ),
   );
 }
@@ -1459,7 +1493,7 @@ function drawWall(game: PetrovWall, slot: HTMLElement, feed: Feed): void {
       el(
         "div",
         { className: "wall-countries" },
-        ...game.countries.map((country) =>
+        ...game.countries.map((country, c) =>
           el(
             "div",
             { className: "wall-country" },
@@ -1481,6 +1515,7 @@ function drawWall(game: PetrovWall, slot: HTMLElement, feed: Feed): void {
               el("br"),
               country.consequence.trim() || "(no consequence set)",
             ),
+            ...(game.odds ? [el("p", { className: "muted wall-odds" }, oddsLine(game.odds, c))] : []),
           ),
         ),
       ),
@@ -1500,6 +1535,7 @@ function drawWall(game: PetrovWall, slot: HTMLElement, feed: Feed): void {
     renderReveal(slot, game.reveal, game.names, {
       consequences: game.consequences ?? ["", ""],
       flight_secs: 0,
+      odds: null,
     });
   } else {
     slot.replaceChildren();
